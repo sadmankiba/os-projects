@@ -4,10 +4,14 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
+int findRdir(char *toks);
+char * findCbin(char *paths[20], char *cmd);
 char ** lineToks(FILE* f);
 int getTokens(char* line, char *toks[128]);
 char ** strarr(int lna, int lns);
+char * mkstr(int ln);
 
 char *EXITCMD = "exit";
 char *CDCMD = "cd";
@@ -25,6 +29,9 @@ int main (int argc, char* argv[]) {
             printf("wish> ");
         
         char *toks[128] = lineToks(f);
+        int rdpos = findRdir(toks);
+        if (rdpos >=1)
+            toks[rdpos] = NULL;
         
         if(strcmp(toks[0], EXITCMD) == 0) {
             exit(0);
@@ -34,20 +41,15 @@ int main (int argc, char* argv[]) {
             for (int i = 0; toks[i] != NULL; i++)
                 paths[i] = toks[i+1];
         } else {
-            char *cbin = mkstr(50);
-            strcpy(cbin, "");
-            for (int i = 0; paths[i] != NULL; i++) {
-                strcpy(cbin, paths[i]);
-                strcat(cbin, "/"); 
-                strcat(cbin, toks[0]);
-                
-                if (access(cbin, X_OK) == 0) 
-                    break;
-                else 
-                    strcpy(cbin, ""); 
-            }
+            char *cbin = findCbin(paths, toks[0]);
 
             if (strcmp(cbin, "") != 0) {
+                if(rdpos >= 1) {
+                    int fd = open(toks[rdpos+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+                    dup2(fd, STDOUT_FILENO);
+                    dup2(fd, STDERR_FILENO);
+                    close(fd);
+                }
                 pid_t pid = fork();
                 if (pid < 0) {
                     printf("fork error");
@@ -62,6 +64,32 @@ int main (int argc, char* argv[]) {
                 printf("error: cbin not found");
         }
     }
+}
+
+int findRdir(char *toks) {
+    int pos = -1;
+    for (int i = 0; toks[i] != NULL; i++)
+        if (strcmp(toks[i], ">")) {
+            pos = i;
+            break;
+        }
+    return pos;
+}
+
+char * findCbin(char *paths[20], char *cmd) {
+    char *cbin = mkstr(50);
+    strcpy(cbin, "");
+    for (int i = 0; paths[i] != NULL; i++) {
+        strcpy(cbin, paths[i]);
+        strcat(cbin, "/"); 
+        strcat(cbin, cmd);
+        
+        if (access(cbin, X_OK) == 0) 
+            break;
+        else 
+            strcpy(cbin, ""); 
+    }
+    return cbin;
 }
 
 char ** lineToks(FILE* f) {
