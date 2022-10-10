@@ -6,7 +6,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-int findRdir(char *toks);
+int findPos(char *toks, char *tok);
 char * findCbin(char *paths[20], char *cmd);
 char ** lineToks(FILE* f);
 int getTokens(char* line, char *toks[128]);
@@ -16,6 +16,8 @@ char * mkstr(int ln);
 char *EXITCMD = "exit";
 char *CDCMD = "cd";
 char *PATHCMD = "path";
+char *IFCMD = "if";
+char ERRMSG[30] = "An error has occurred\n";
 
 int main (int argc, char* argv[]) {
     int batch = argc > 1? 1: 0;
@@ -29,7 +31,7 @@ int main (int argc, char* argv[]) {
             printf("wish> ");
         
         char *toks[128] = lineToks(f);
-        int rdpos = findRdir(toks);
+        int rdpos = findPos(toks, ">");
         if (rdpos >=1)
             toks[rdpos] = NULL;
         
@@ -40,9 +42,17 @@ int main (int argc, char* argv[]) {
         } else if(strcmp(toks[0], PATHCMD) == 0) {
             for (int i = 0; toks[i] != NULL; i++)
                 paths[i] = toks[i+1];
+        } else if (strcmp(toks[0], IFCMD) == 0) { 
+            int tnpos = findPos(toks, "then");
+            toks[tnpos-2] = NULL;
+            for (int i = 0; toks[i] != NULL; i++) {
+                toks[i] = toks[i+1];
+            }
+            char *cbin = findCbin(paths, toks[0]);
+            int ret = runCmd(cbin, toks);
+            
         } else {
             char *cbin = findCbin(paths, toks[0]);
-
             if (strcmp(cbin, "") != 0) {
                 if(rdpos >= 1) {
                     int fd = open(toks[rdpos+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
@@ -50,23 +60,29 @@ int main (int argc, char* argv[]) {
                     dup2(fd, STDERR_FILENO);
                     close(fd);
                 }
-                pid_t pid = fork();
-                if (pid < 0) {
-                    printf("fork error");
-                    exit(1);
-                } else if (pid == 0) {
-                    execv(cbin, toks);
-                } else {
-                    wait(NULL);
-                }
+                runCmd(cbin, toks);
             }
-            else
-                printf("error: cbin not found");
+            else 
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
         }
     }
 }
 
-int findRdir(char *toks) {
+int runCmd(char *cbin, char *toks[128]) {
+    int st = -100;
+    pid_t pid = fork();
+    if (pid < 0) {
+        write(STDERR_FILENO, ERRMSG, strlen(ERRMSG)); 
+        exit(1);
+    } else if (pid == 0) {
+        execv(cbin, toks);
+    } else {
+        wait(&st);
+    }
+    return st;
+}
+
+int findPos(char *toks, char *tok) {
     int pos = -1;
     for (int i = 0; toks[i] != NULL; i++)
         if (strcmp(toks[i], ">")) {
