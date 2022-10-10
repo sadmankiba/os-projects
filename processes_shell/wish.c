@@ -11,12 +11,14 @@ char ** strarr(int lna, int lns);
 
 char *EXITCMD = "exit";
 char *CDCMD = "cd";
+char *PATHCMD = "path";
 
 int main (int argc, char* argv[]) {
     int batch = argc > 1? 1: 0;
     FILE *f = batch == 1? fopen(argv[1], "r"): stdin;
     char *paths[20] = strarr(20, 50);
     strcpy(paths[0], "/bin");
+    paths[1] = NULL;
 
     while(1) {
         if (batch == 0)
@@ -28,24 +30,36 @@ int main (int argc, char* argv[]) {
             exit(0);
         } else if(strcmp(toks[0], CDCMD) == 0) {
             chdir(toks[1]);
+        } else if(strcmp(toks[0], PATHCMD) == 0) {
+            for (int i = 0; toks[i] != NULL; i++)
+                paths[i] = toks[i+1];
         } else {
-            printf("%s", toks[0]);
-            pid_t pid = fork();
-            if (pid < 0) {
-                printf("fork error");
-                exit(1);
-            }
-            else if (pid == 0) {
-                char *cbin = mkstr(50);
-                cbin = strcpy(cbin, paths[0]);
-                cbin = strcat(cbin, "/"); 
-                cbin = strcat(cbin, toks[0]);
+            char *cbin = mkstr(50);
+            strcpy(cbin, "");
+            for (int i = 0; paths[i] != NULL; i++) {
+                strcpy(cbin, paths[i]);
+                strcat(cbin, "/"); 
+                strcat(cbin, toks[0]);
                 
-                execv(cbin, toks);
-            } 
-            else {
-                wait(NULL);
+                if (access(cbin, X_OK) == 0) 
+                    break;
+                else 
+                    strcpy(cbin, ""); 
             }
+
+            if (strcmp(cbin, "") != 0) {
+                pid_t pid = fork();
+                if (pid < 0) {
+                    printf("fork error");
+                    exit(1);
+                } else if (pid == 0) {
+                    execv(cbin, toks);
+                } else {
+                    wait(NULL);
+                }
+            }
+            else
+                printf("error: cbin not found");
         }
     }
 }
