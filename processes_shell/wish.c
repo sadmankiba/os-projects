@@ -6,7 +6,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-int findPos(char *toks, char *tok);
+int runCmd(char *cbin, char *toks[128]);
+int findPos(char *toks[128], char *tok);
 char * findCbin(char *paths[20], char *cmd);
 char ** lineToks(FILE* f);
 int getTokens(char* line, char *toks[128]);
@@ -22,7 +23,7 @@ char ERRMSG[30] = "An error has occurred\n";
 int main (int argc, char* argv[]) {
     int batch = argc > 1? 1: 0;
     FILE *f = batch == 1? fopen(argv[1], "r"): stdin;
-    char *paths[20] = strarr(20, 50);
+    char **paths = strarr(20, 50);
     strcpy(paths[0], "/bin");
     paths[1] = NULL;
 
@@ -30,7 +31,7 @@ int main (int argc, char* argv[]) {
         if (batch == 0)
             printf("wish> ");
         
-        char *toks[128] = lineToks(f);
+        char **toks = lineToks(f);
         int rdpos = findPos(toks, ">");
         if (rdpos >=1)
             toks[rdpos] = NULL;
@@ -38,29 +39,49 @@ int main (int argc, char* argv[]) {
         if(strcmp(toks[0], EXITCMD) == 0) {
             exit(0);
         } else if(strcmp(toks[0], CDCMD) == 0) {
-            chdir(toks[1]);
+            if (toks[1] == NULL || toks[2] != NULL)
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+            else
+                chdir(toks[1]);
         } else if(strcmp(toks[0], PATHCMD) == 0) {
             for (int i = 0; toks[i] != NULL; i++)
                 paths[i] = toks[i+1];
         } else if (strcmp(toks[0], IFCMD) == 0) { 
             int tnpos = findPos(toks, "then");
-            toks[tnpos-2] = NULL;
-            for (int i = 0; toks[i] != NULL; i++) {
-                toks[i] = toks[i+1];
+            char **ftoks = strarr(128, 100);
+            char **stoks = strarr(128, 100);
+            int i;
+            for (i = 0; i < (tnpos + 1 - 4); i++) {
+                strcpy(ftoks[i], toks[i+1]);
             }
-            char *cbin = findCbin(paths, toks[0]);
-            int ret = runCmd(cbin, toks);
+            ftoks[i] = NULL;
+
+            for (i = 0; toks[tnpos+1+i] != NULL; i++) {
+                strcpy(stoks[i], toks[tnpos+1+i]);
+            }
+            stoks[i-1] = NULL;
             
+            char *cbin = findCbin(paths, ftoks[0]);
+            int ret = runCmd(cbin, ftoks);
+
+            if ((strcmp(toks[tnpos - 2], "==") == 0 && ret == atoi(toks[tnpos - 1])) 
+                || (strcmp(toks[tnpos - 2], "!=") == 0 && ret != atoi(toks[tnpos - 1]))) {
+                char *cbin = findCbin(paths, stoks[0]);
+                runCmd(cbin, stoks);
+            }
+
         } else {
             char *cbin = findCbin(paths, toks[0]);
             if (strcmp(cbin, "") != 0) {
+                int fd;
                 if(rdpos >= 1) {
-                    int fd = open(toks[rdpos+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+                    fd = open(toks[rdpos+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
                     dup2(fd, STDOUT_FILENO);
                     dup2(fd, STDERR_FILENO);
                     close(fd);
                 }
                 runCmd(cbin, toks);
+                close(fd);
             }
             else 
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
@@ -68,6 +89,7 @@ int main (int argc, char* argv[]) {
     }
 }
 
+// Run a command from its binary path and array of arguments
 int runCmd(char *cbin, char *toks[128]) {
     int st = -100;
     pid_t pid = fork();
@@ -82,16 +104,18 @@ int runCmd(char *cbin, char *toks[128]) {
     return st;
 }
 
-int findPos(char *toks, char *tok) {
+// Find index of an element in an array of strings
+int findPos(char *toks[128], char *tok) {
     int pos = -1;
     for (int i = 0; toks[i] != NULL; i++)
-        if (strcmp(toks[i], ">")) {
+        if (strcmp(toks[i], tok) == 0) {
             pos = i;
             break;
         }
     return pos;
 }
 
+// Find an binary file path of a command
 char * findCbin(char *paths[20], char *cmd) {
     char *cbin = mkstr(50);
     strcpy(cbin, "");
@@ -108,6 +132,7 @@ char * findCbin(char *paths[20], char *cmd) {
     return cbin;
 }
 
+// Read a line from a file splitting into tokens
 char ** lineToks(FILE* f) {
     size_t szl = 1000;
     char *line = mkstr(szl);
@@ -115,29 +140,32 @@ char ** lineToks(FILE* f) {
         exit(0);
     
     // line = strtok(line, "\n");
-    char *toks[128] = strarr(128, 100); 
+    char **toks = strarr(128, 100); 
     getTokens(line, toks);
     return toks;
 }
 
+// Split a line into tokens
 int getTokens(char* line, char *toks[128]) {
 	char *dlm = " \n\t\r\f\v";
-    toks[0] = strtok(line, dlm);
+    strcpy(toks[0], strtok(line, dlm));
     int i = 1;
-    while((toks[i] != strtok(NULL, dlm)) != NULL) {
+    while((toks[i] = strtok(NULL, dlm)) != NULL) {
         i++;
     }
 	return i;
 }
 
+// Create a string array
 char ** strarr(int lna, int lns) {
-    char *sarr[lna]; 
+    char **sarr = (char **) malloc(lna * sizeof(char *)); 
     for (int i = 0; i < lna; i++) 
         sarr[i] = mkstr(lns);
     
     return sarr;
 }
 
+// Allocate mem for a string
 char * mkstr(int ln) {
     return (char *) malloc(ln * sizeof(char));
 }
