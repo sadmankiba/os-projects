@@ -20,6 +20,7 @@ char *CDCMD = "cd";
 char *PATHCMD = "path";
 char *IFCMD = "if";
 char ERRMSG[30] = "An error has occurred\n";
+int PATH_LEN = 200;
 
 int main (int argc, char* argv[]) {
     if (argc != 1 && argc != 2) {
@@ -36,7 +37,7 @@ int main (int argc, char* argv[]) {
             exit(1);
         }
     } else f = stdin;
-    char **paths = strarr(50, 100);
+    char **paths = strarr(50, PATH_LEN);
     strcpy(paths[0], "/bin");
     paths[1] = NULL;
 
@@ -83,6 +84,7 @@ int main (int argc, char* argv[]) {
                 chdir(toks[1]);
         } else if(strcmp(toks[0], PATHCMD) == 0) {
             int j = 0;   
+            paths = strarr(50, PATH_LEN);
             for (j = 0; toks[j+1] != NULL; j++) {
                 strcpy(paths[j], toks[j+1]); 
             }
