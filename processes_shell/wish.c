@@ -24,7 +24,7 @@ char ERRMSG[30] = "An error has occurred\n";
 int main (int argc, char* argv[]) {
     int batch = argc > 1? 1: 0;
     FILE *f = batch == 1? fopen(argv[1], "r"): stdin;
-    char **paths = strarr(20, 50);
+    char **paths = strarr(50, 100);
     strcpy(paths[0], "/bin");
     paths[1] = NULL;
 
@@ -47,10 +47,10 @@ int main (int argc, char* argv[]) {
         }
 
         char **toks = ltoks(line);
-        printf("toks are: ");
+        // printf("toks are: ");
         for (int i = 0; toks[i] != NULL; i++)
-            printf("%s ", toks[i]);
-        printf("\n");
+            // printf("%s ", toks[i]);
+        // printf("\n");
 
         if (toks[0] == NULL || strcmp(toks[0], "") == 0) {
             continue;
@@ -65,8 +65,10 @@ int main (int argc, char* argv[]) {
             else
                 chdir(toks[1]);
         } else if(strcmp(toks[0], PATHCMD) == 0) {
-            for (int i = 0; toks[i] != NULL; i++)
-                strcpy(paths[i], toks[i+1]);
+            int j;
+            for (j = 0; toks[j+1] != NULL; j++)
+                strcpy(paths[j], toks[j+1]);
+            paths[j] == NULL;
         } else if (strcmp(toks[0], IFCMD) == 0) { 
             int tnpos = findPos(toks, "then");
 
@@ -173,6 +175,7 @@ char ** lineToks(FILE* f) {
     
     // line = strtok(line, "\n");
     char **toks = strarr(128, 100); 
+    // printf("getting tokens");
     getTokens(line, toks);
     return toks;
 }
@@ -181,9 +184,11 @@ char ** lineToks(FILE* f) {
 int getTokens(char* line, char *toks[128]) {
 	char *dlm = " \n\t\r\f\v";
     toks[0] = strtok(line, dlm);
-    if (strcmp(toks[0], "") == 0) 
+    // printf("got first token");
+    if (toks[0] != NULL && strcmp(toks[0], "") == 0) 
         toks[0] = NULL;
     
+    // printf("compared first token");
     int i = 0;
     if (toks[0] != NULL) {
         i = 1;
@@ -191,7 +196,7 @@ int getTokens(char* line, char *toks[128]) {
             i++;
         }
     }
-    
+    // printf("finished getting tokens. returning...");
 	return i;
 }
 
