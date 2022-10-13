@@ -30,7 +30,7 @@ int main (int argc, char* argv[]) {
     int batch = argc > 1? 1: 0;
     FILE *f; 
     if (batch == 1) {
-        if (access(argv[1], X_OK) == 0)
+        if (access(argv[1], R_OK) == 0)
             f = fopen(argv[1], "r");
         else {
             write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
