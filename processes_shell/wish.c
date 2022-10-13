@@ -21,6 +21,7 @@ char *PATHCMD = "path";
 char *IFCMD = "if";
 char ERRMSG[30] = "An error has occurred\n";
 int PATH_LEN = 200;
+int LINE_LEN = 1000;
 
 int main (int argc, char* argv[]) {
     if (argc != 1 && argc != 2) {
@@ -45,7 +46,7 @@ int main (int argc, char* argv[]) {
         if (batch == 0)
             printf("wish> ");
         
-        size_t szl = 1000;
+        size_t szl = LINE_LEN;
         char *line = mkstr(szl);
         if(getline(&line, &szl, f) == EOF)
             exit(0);
@@ -54,11 +55,17 @@ int main (int argc, char* argv[]) {
         strcpy(rdout, "");
         
         if (rp != NULL) {
-            strcpy(rdout, rp + 1);
+            // strcpy(rdout, rp + 1);
             char * dlm = " \n\t\r\f\v";
-            rdout = strtok(rdout, dlm);
-            rp[0] = '\0';
-            if (rdout == NULL || strtok(NULL, dlm) != NULL || strtok(line, dlm) == NULL) {
+            line = strtok(line, ">");
+            rdout = strtok(NULL, dlm);
+            // printf("line: %s, rdout: %s", line, rdout);
+            char *lcp = mkstr(LINE_LEN);
+            if (line != NULL) {
+                strcpy(lcp, line);
+            }
+            if (rdout == NULL || strtok(NULL, dlm) != NULL  
+                || strchr(rdout, '>') != NULL || line == NULL || strtok(lcp, dlm) == NULL) {
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
                 continue;
             }
@@ -208,7 +215,9 @@ char ** lineToks(FILE* f) {
 
 // Split a line into tokens
 int getTokens(char* line, char *toks[128]) {
-	char *dlm = " \n\t\r\f\v";
+	// printf("line (in getTokens): %s", line);
+
+    char *dlm = " \n\t\r\f\v";
     toks[0] = strtok(line, dlm);
     // printf("got first token");
     if (toks[0] != NULL && strcmp(toks[0], "") == 0) 
