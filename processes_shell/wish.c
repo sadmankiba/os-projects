@@ -48,7 +48,11 @@ int main (int argc, char* argv[]) {
 
         char **toks = ltoks(line);
         
-        if(strcmp(toks[0], EXITCMD) == 0) {
+        if (toks[0] == NULL || strcmp(toks[0], "") == 0) {
+            continue;
+        } else if(strcmp(toks[0], EXITCMD) == 0) {
+            if (toks[1] != NULL)
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
             exit(0);
         } else if(strcmp(toks[0], CDCMD) == 0) {
             if (toks[1] == NULL || toks[2] != NULL)
@@ -59,7 +63,16 @@ int main (int argc, char* argv[]) {
             for (int i = 0; toks[i] != NULL; i++)
                 paths[i] = toks[i+1];
         } else if (strcmp(toks[0], IFCMD) == 0) { 
+            if (toks[findPos(toks, "fi")+1] != NULL)
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+
             int tnpos = findPos(toks, "then");
+            if (toks[tnpos + 1] != NULL)
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+            
+            if ((strcmp(toks[tnpos - 2], "==") != 0) && (strcmp(toks[tnpos - 2], "!=") != 0)) 
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+
             char **ftoks = strarr(128, 100);
             char **stoks = strarr(128, 100);
             int i;
@@ -167,10 +180,14 @@ char ** lineToks(FILE* f) {
 int getTokens(char* line, char *toks[128]) {
 	char *dlm = " \n\t\r\f\v";
     strcpy(toks[0], strtok(line, dlm));
-    int i = 1;
-    while((toks[i] = strtok(NULL, dlm)) != NULL) {
-        i++;
+    int i = 0;
+    if (toks[0] != NULL && strcmp(toks[0], "") != 0) {
+        i = 1;
+        while((toks[i] = strtok(NULL, dlm)) != NULL) {
+            i++;
+        }
     }
+    
 	return i;
 }
 
