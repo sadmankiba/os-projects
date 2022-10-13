@@ -65,7 +65,7 @@ int main (int argc, char* argv[]) {
             else
                 chdir(toks[1]);
         } else if(strcmp(toks[0], PATHCMD) == 0) {
-            int j;
+            int j = 0;
             for (j = 0; toks[j+1] != NULL; j++)
                 strcpy(paths[j], toks[j+1]);
             paths[j] == NULL;
@@ -145,7 +145,7 @@ int findPos(char *toks[128], char *tok) {
 
 // Find an binary file path of a command
 char * findCbin(char *paths[20], char *cmd) {
-    char *cbin = mkstr(50);
+    char *cbin = mkstr(300);
     strcpy(cbin, "");
     for (int i = 0; paths[i] != NULL; i++) {
         strcpy(cbin, paths[i]);
