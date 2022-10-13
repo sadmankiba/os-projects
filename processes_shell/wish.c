@@ -48,7 +48,7 @@ int main (int argc, char* argv[]) {
 
         char **toks = ltoks(line);
         // printf("toks are: ");
-        for (int i = 0; toks[i] != NULL; i++)
+        // for (int i = 0; toks[i] != NULL; i++)
             // printf("%s ", toks[i]);
         // printf("\n");
 
