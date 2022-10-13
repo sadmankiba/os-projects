@@ -44,12 +44,11 @@ int main (int argc, char* argv[]) {
             strcpy(rdout, rp + 1);
             char * dlm = " \n\t\r\f\v";
             rdout = strtok(rdout, dlm);
-            if (rdout == NULL || strtok(NULL, dlm) != NULL) {
+            rp[0] = '\0';
+            if (rdout == NULL || strtok(NULL, dlm) != NULL || strtok(line, dlm) == NULL) {
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
                 continue;
             }
-
-            rp[0] = '\0';
         }
 
         char **toks = ltoks(line);
