@@ -43,6 +43,8 @@ int main (int argc, char* argv[]) {
         if (rp != NULL) {
             strcpy(rdout, rp + 1);
             rdout = strtok(rdout, " \n\t\r\f\v");
+            if (rdout == NULL)
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
             rp[0] = '\0';
         }
 
