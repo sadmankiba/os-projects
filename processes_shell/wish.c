@@ -22,8 +22,20 @@ char *IFCMD = "if";
 char ERRMSG[30] = "An error has occurred\n";
 
 int main (int argc, char* argv[]) {
+    if (argc != 1 && argc != 2) {
+        write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+        exit(1);
+    }
     int batch = argc > 1? 1: 0;
-    FILE *f = batch == 1? fopen(argv[1], "r"): stdin;
+    FILE *f; 
+    if (batch == 1) {
+        if (access(argv[1], X_OK) == 0)
+            f = fopen(argv[1], "r");
+        else {
+            write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+            exit(1);
+        }
+    } else f = stdin;
     char **paths = strarr(50, 100);
     strcpy(paths[0], "/bin");
     paths[1] = NULL;
