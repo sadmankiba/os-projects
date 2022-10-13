@@ -47,13 +47,18 @@ int main (int argc, char* argv[]) {
         }
 
         char **toks = ltoks(line);
-        
+        printf("toks are: ");
+        for (int i = 0; toks[i] != NULL; i++)
+            printf("%s ", toks[i]);
+        printf("\n");
+
         if (toks[0] == NULL || strcmp(toks[0], "") == 0) {
             continue;
         } else if(strcmp(toks[0], EXITCMD) == 0) {
             if (toks[1] != NULL)
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
-            exit(0);
+            else
+                exit(0);
         } else if(strcmp(toks[0], CDCMD) == 0) {
             if (toks[1] == NULL || toks[2] != NULL)
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
@@ -61,40 +66,36 @@ int main (int argc, char* argv[]) {
                 chdir(toks[1]);
         } else if(strcmp(toks[0], PATHCMD) == 0) {
             for (int i = 0; toks[i] != NULL; i++)
-                paths[i] = toks[i+1];
+                strcpy(paths[i], toks[i+1]);
         } else if (strcmp(toks[0], IFCMD) == 0) { 
-            if (toks[findPos(toks, "fi")+1] != NULL)
-                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
-
             int tnpos = findPos(toks, "then");
-            if (toks[tnpos + 1] != NULL)
+
+            if (toks[findPos(toks, "fi")+1] != NULL || tnpos == -1
+                || (strcmp(toks[tnpos - 2], "==") != 0) && (strcmp(toks[tnpos - 2], "!=") != 0))
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
-            
-            if ((strcmp(toks[tnpos - 2], "==") != 0) && (strcmp(toks[tnpos - 2], "!=") != 0)) 
-                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+            else {
+                char **ftoks = strarr(128, 100);
+                char **stoks = strarr(128, 100);
+                int i;
+                for (i = 0; i < (tnpos + 1 - 4); i++) {
+                    strcpy(ftoks[i], toks[i+1]);
+                }
+                ftoks[i] = NULL;
 
-            char **ftoks = strarr(128, 100);
-            char **stoks = strarr(128, 100);
-            int i;
-            for (i = 0; i < (tnpos + 1 - 4); i++) {
-                strcpy(ftoks[i], toks[i+1]);
+                for (i = 0; toks[tnpos+1+i] != NULL; i++) {
+                    strcpy(stoks[i], toks[tnpos+1+i]);
+                }
+                stoks[i-1] = NULL;
+                
+                char *cbin = findCbin(paths, ftoks[0]);
+                int ret = runCmd(cbin, ftoks, "");
+
+                if ((strcmp(toks[tnpos - 2], "==") == 0 && ret == atoi(toks[tnpos - 1])) 
+                    || (strcmp(toks[tnpos - 2], "!=") == 0 && ret != atoi(toks[tnpos - 1]))) {
+                    char *cbin = findCbin(paths, stoks[0]);
+                    runCmd(cbin, stoks, "");
+                }
             }
-            ftoks[i] = NULL;
-
-            for (i = 0; toks[tnpos+1+i] != NULL; i++) {
-                strcpy(stoks[i], toks[tnpos+1+i]);
-            }
-            stoks[i-1] = NULL;
-            
-            char *cbin = findCbin(paths, ftoks[0]);
-            int ret = runCmd(cbin, ftoks, "");
-
-            if ((strcmp(toks[tnpos - 2], "==") == 0 && ret == atoi(toks[tnpos - 1])) 
-                || (strcmp(toks[tnpos - 2], "!=") == 0 && ret != atoi(toks[tnpos - 1]))) {
-                char *cbin = findCbin(paths, stoks[0]);
-                runCmd(cbin, stoks, "");
-            }
-
         } else {
             char *cbin = findCbin(paths, toks[0]);
             if (strcmp(cbin, "") != 0) {
@@ -179,9 +180,12 @@ char ** lineToks(FILE* f) {
 // Split a line into tokens
 int getTokens(char* line, char *toks[128]) {
 	char *dlm = " \n\t\r\f\v";
-    strcpy(toks[0], strtok(line, dlm));
+    toks[0] = strtok(line, dlm);
+    if (strcmp(toks[0], "") == 0) 
+        toks[0] = NULL;
+    
     int i = 0;
-    if (toks[0] != NULL && strcmp(toks[0], "") != 0) {
+    if (toks[0] != NULL) {
         i = 1;
         while((toks[i] = strtok(NULL, dlm)) != NULL) {
             i++;
