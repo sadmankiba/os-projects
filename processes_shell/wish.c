@@ -143,7 +143,7 @@ int main (int argc, char* argv[]) {
 
 // Run a command from its binary path and array of arguments
 int runCmd(char *cbin, char *toks[128], char *rdout) {
-    int st = -100;
+    int st = -100, rt;
     pid_t pid = fork();
     if (pid < 0) {
         write(STDERR_FILENO, ERRMSG, strlen(ERRMSG)); 
@@ -159,9 +159,16 @@ int runCmd(char *cbin, char *toks[128], char *rdout) {
         execv(cbin, toks);
 
     } else {
+        // https://stackoverflow.com/a/2667166/7283201
         wait(&st);
+        if(WIFEXITED(st)) {
+            rt = WEXITSTATUS(st);
+            // printf("Child's exit code %d\n", rt);
+        }
+        else
+            write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
     }
-    return st;
+    return rt;
 }
 
 // Find index of an element in an array of strings
