@@ -6,9 +6,10 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-int runCmd(char *cbin, char *toks[128]);
+int runCmd(char *cbin, char *toks[128], char *rdout);
 int findPos(char *toks[128], char *tok);
 char * findCbin(char *paths[20], char *cmd);
+char ** ltoks(char* line);
 char ** lineToks(FILE* f);
 int getTokens(char* line, char *toks[128]);
 char ** strarr(int lna, int lns);
@@ -31,10 +32,21 @@ int main (int argc, char* argv[]) {
         if (batch == 0)
             printf("wish> ");
         
-        char **toks = lineToks(f);
-        int rdpos = findPos(toks, ">");
-        if (rdpos >=1)
-            toks[rdpos] = NULL;
+        size_t szl = 1000;
+        char *line = mkstr(szl);
+        if(getline(&line, &szl, f) == EOF)
+            exit(0);
+        char * rp = strchr(line, '>');
+        char * rdout = mkstr(100);
+        strcpy(rdout, "");
+        
+        if (rp != NULL) {
+            strcpy(rdout, rp + 1);
+            rdout = strtok(rdout, " \n\t\r\f\v");
+            rp[0] = '\0';
+        }
+
+        char **toks = ltoks(line);
         
         if(strcmp(toks[0], EXITCMD) == 0) {
             exit(0);
@@ -62,26 +74,18 @@ int main (int argc, char* argv[]) {
             stoks[i-1] = NULL;
             
             char *cbin = findCbin(paths, ftoks[0]);
-            int ret = runCmd(cbin, ftoks);
+            int ret = runCmd(cbin, ftoks, "");
 
             if ((strcmp(toks[tnpos - 2], "==") == 0 && ret == atoi(toks[tnpos - 1])) 
                 || (strcmp(toks[tnpos - 2], "!=") == 0 && ret != atoi(toks[tnpos - 1]))) {
                 char *cbin = findCbin(paths, stoks[0]);
-                runCmd(cbin, stoks);
+                runCmd(cbin, stoks, "");
             }
 
         } else {
             char *cbin = findCbin(paths, toks[0]);
             if (strcmp(cbin, "") != 0) {
-                int fd;
-                if(rdpos >= 1) {
-                    fd = open(toks[rdpos+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-                    dup2(fd, STDOUT_FILENO);
-                    dup2(fd, STDERR_FILENO);
-                    close(fd);
-                }
-                runCmd(cbin, toks);
-                close(fd);
+                runCmd(cbin, toks, rdout);
             }
             else 
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
@@ -90,14 +94,22 @@ int main (int argc, char* argv[]) {
 }
 
 // Run a command from its binary path and array of arguments
-int runCmd(char *cbin, char *toks[128]) {
+int runCmd(char *cbin, char *toks[128], char *rdout) {
     int st = -100;
     pid_t pid = fork();
     if (pid < 0) {
         write(STDERR_FILENO, ERRMSG, strlen(ERRMSG)); 
         exit(1);
     } else if (pid == 0) {
+        int fd;
+        if(strcmp(rdout, "") != 0) {
+            fd = open(rdout, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+        }
         execv(cbin, toks);
+
     } else {
         wait(&st);
     }
@@ -130,6 +142,12 @@ char * findCbin(char *paths[20], char *cmd) {
             strcpy(cbin, ""); 
     }
     return cbin;
+}
+
+char ** ltoks(char* line) {
+    char **toks = strarr(128, 100); 
+    getTokens(line, toks);
+    return toks;
 }
 
 // Read a line from a file splitting into tokens

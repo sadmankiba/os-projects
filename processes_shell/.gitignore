@@ -1,3 +1,9 @@
 wish
-tests-out/
 *.txt
+
+# test files
+tests-out/
+hello
+output.9
+r23
+ret_arg_0
