@@ -72,7 +72,7 @@ int main (int argc, char* argv[]) {
         } else if(strcmp(toks[0], PATHCMD) == 0) {
             int j = 0;   
             for (j = 0; toks[j+1] != NULL; j++) {
-                strcpy(paths[j], toks[j+1]);
+                strcpy(paths[j], toks[j+1]); 
             }
             paths[j] = NULL;
         } else if (strcmp(toks[0], IFCMD) == 0) { 
@@ -160,7 +160,8 @@ char * findCbin(char *paths[20], char *cmd) {
     strcpy(cbin, "");
     for (int i = 0; paths[i] != NULL; i++) {
         strcpy(cbin, paths[i]);
-        strcat(cbin, "/"); 
+        if (cbin[strlen(cbin) - 1] != '/')
+            strcat(cbin, "/"); 
         strcat(cbin, cmd);
         
         if (access(cbin, X_OK) == 0) 
