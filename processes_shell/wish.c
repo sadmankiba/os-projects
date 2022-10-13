@@ -49,7 +49,7 @@ int main (int argc, char* argv[]) {
         char **toks = ltoks(line);
         // printf("toks are: ");
         // for (int i = 0; toks[i] != NULL; i++)
-            // printf("%s ", toks[i]);
+        //     printf("%s ", toks[i]);
         // printf("\n");
 
         if (toks[0] == NULL || strcmp(toks[0], "") == 0) {
@@ -65,10 +65,11 @@ int main (int argc, char* argv[]) {
             else
                 chdir(toks[1]);
         } else if(strcmp(toks[0], PATHCMD) == 0) {
-            int j = 0;
-            for (j = 0; toks[j+1] != NULL; j++)
+            int j = 0;   
+            for (j = 0; toks[j+1] != NULL; j++) {
                 strcpy(paths[j], toks[j+1]);
-            paths[j] == NULL;
+            }
+            paths[j] = NULL;
         } else if (strcmp(toks[0], IFCMD) == 0) { 
             int tnpos = findPos(toks, "then");
 
@@ -106,6 +107,11 @@ int main (int argc, char* argv[]) {
             else 
                 write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
         }
+
+        // printf("paths are: ");
+        // for (int i = 0; paths[i] != NULL; i++)
+        //     printf("%s ", paths[i]);
+        // printf("\n");
     }
 }
 
