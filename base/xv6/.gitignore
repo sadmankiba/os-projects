@@ -1,0 +1,22 @@
+*.d
+*.o
+*.out
+
+# binaries and .asm files
+bootblock 
+entryother
+initcode
+kernel
+mkfs 
+kernel.sym
+xv6.img
+fs.img
+_*
+*.asm
+vectors.S 
+*.sym
+
+# Test files
+Makefile.test
+test*.c
+tests-out/
