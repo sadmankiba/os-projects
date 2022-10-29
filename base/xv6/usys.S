@@ -8,6 +8,8 @@
     int $T_SYSCALL; \
     ret
 
+SYSCALL(settickets)
+SYSCALL(getpinfo)
 SYSCALL(fork)
 SYSCALL(exit)
 SYSCALL(wait)

@@ -283,6 +283,18 @@ create(char *path, short type, short major, short minor)
 }
 
 int
+sys_settickets(void)
+{
+  return 0;
+}
+
+int 
+sys_getpinfo(void)
+{
+  return 0;
+}
+
+int
 sys_open(void)
 {
   char *path;
