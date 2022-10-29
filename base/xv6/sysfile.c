@@ -295,6 +295,18 @@ sys_getpinfo(void)
 }
 
 int
+sys_mprotect(void)
+{
+  return 0;
+}
+
+int 
+sys_munprotect(void)
+{
+  return 0;
+}
+
+int
 sys_open(void)
 {
   char *path;

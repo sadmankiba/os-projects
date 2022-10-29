@@ -105,8 +105,12 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_settickets(void);
 extern int sys_getpinfo(void);
+extern int sys_mprotect(void);
+extern int sys_munprotect(void);
 
 static int (*syscalls[])(void) = {
+[SYS_mprotect] sys_mprotect,
+[SYS_munprotect] sys_munprotect,
 [SYS_settickets] sys_settickets,
 [SYS_getpinfo] sys_getpinfo,
 [SYS_fork]    sys_fork,

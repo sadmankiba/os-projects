@@ -8,6 +8,8 @@
     int $T_SYSCALL; \
     ret
 
+SYSCALL(mprotect)
+SYSCALL(munprotect)
 SYSCALL(settickets)
 SYSCALL(getpinfo)
 SYSCALL(fork)
