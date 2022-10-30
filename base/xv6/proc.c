@@ -336,22 +336,27 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     trun = 0;
-
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      // cprintf("Checking tickets. p->tickets: %d\n", p->tickets);
-      if(p->tickets == 1 && p->state == RUNNABLE) {
+    for (int i = 0; i < NPROC; i++) {
+      if(ptable.proc[i].state == RUNNABLE && ptable.proc[i].tickets == 1) {
         trun = 1;
         break;
       }
     }
+    // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    //   // cprintf("Checking tickets. p->tickets: %d\n", p->tickets);
+    //   if(p->tickets == 1 && p->state == RUNNABLE) {
+    //     // trun = 1;
+    //     break;
+    //   }
+    // }
     // cprintf("trun: %d\n", trun);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       // cprintf("checking for runnable process. p->tickets: %d\n", p->tickets);
-      // if(p->tickets != trun || p->state != RUNNABLE)
-      //   continue;
-      trun = trun;
-      if(p->state != RUNNABLE)
+      if(p->tickets != trun || p->state != RUNNABLE)
         continue;
+      // trun = trun;
+      // if(p->state != RUNNABLE)
+      //   continue;
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
