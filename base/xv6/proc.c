@@ -349,6 +349,7 @@ scheduler(void)
       // cprintf("checking for runnable process. p->tickets: %d\n", p->tickets);
       // if(p->tickets != trun || p->state != RUNNABLE)
       //   continue;
+      trun = trun;
       if(p->state != RUNNABLE)
         continue;
 
@@ -550,7 +551,7 @@ procdump(void)
 }
 
 void
-procinfo(struct pstat *ps)
+myprocinfo(struct pstat *ps)
 {
   int i;
   struct proc *p;
@@ -565,6 +566,7 @@ procinfo(struct pstat *ps)
       ps -> inuse[i] = 1;
     
     ps->tickets[i] = p->tickets;
-    ps->ticks[i] = p->ticks;
+    ps->ticks[i] = 0;
   }
+  release(&ptable.lock);
 }

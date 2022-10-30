@@ -294,22 +294,29 @@ mystrcmp(const char *p, const char *q)
 int
 sys_settickets(void)
 {
-  char *numstr = "";
+  // char *numstr = "";
+  int num;
   struct proc *curproc = myproc();
   
   begin_op();
-  if(argstr(0, &numstr) < 0){
+  if(argint(0, &num) < 0){
     end_op();
     return -1;
   }
-  if (mystrcmp(numstr, "0") == 0)
-    curproc->tickets = 0;
-  else if (mystrcmp(numstr, "0") == 0)
-    curproc->tickets = 1;
-  else {
+  // cprintf("settickets arg is %d\n", num);
+  if (num != 0 && num != 1) {
     end_op();
     return -1;
   }
+  curproc->tickets = num;
+  // if (mystrcmp(numstr, "0") == 0)
+  //   curproc->tickets = 0;
+  // else if (mystrcmp(numstr, "0") == 0)
+  //   curproc->tickets = 1;
+  // else {
+  //   end_op();
+  //   return -1;
+  // }
   
   return 0;
 }
@@ -319,13 +326,15 @@ int
 sys_getpinfo(void)
 {
   struct pstat * ps;
-  
   begin_op();
   if (argptr(0, (void *)&ps, sizeof(*ps)) < 0) {
     end_op();
     return -1;
   }
-  procinfo(ps);
+  if (ps == ((void *)0)) {
+    return -1;
+  }
+  myprocinfo(ps);
   return 0;
 }
 
