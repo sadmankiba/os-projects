@@ -88,6 +88,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->tickets = 1;
 
   release(&ptable.lock);
 
@@ -198,6 +199,7 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
+  np->tickets = curproc->tickets;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -325,14 +327,28 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
+  int trun;     // process with trun will run
+  // cprintf("In scheduler from main");
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
-
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    trun = 0;
+
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      // cprintf("Checking tickets. p->tickets: %d\n", p->tickets);
+      if(p->tickets == 1 && p->state == RUNNABLE) {
+        trun = 1;
+        break;
+      }
+    }
+    // cprintf("trun: %d\n", trun);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      // cprintf("checking for runnable process. p->tickets: %d\n", p->tickets);
+      // if(p->tickets != trun || p->state != RUNNABLE)
+      //   continue;
       if(p->state != RUNNABLE)
         continue;
 
@@ -342,7 +358,7 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-
+      // cprintf("about to schedule: %s, pid: %d\n", p->name, p->pid);
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -530,5 +546,25 @@ procdump(void)
         cprintf(" %p", pc[i]);
     }
     cprintf("\n");
+  }
+}
+
+void
+procinfo(struct pstat *ps)
+{
+  int i;
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(i = 0; i < NPROC; i++) {
+    p = &ptable.proc[i];
+    ps->pid[i] = p -> pid;
+    if(p -> state == UNUSED)
+      ps -> inuse[i] = 0;
+    else
+      ps -> inuse[i] = 1;
+    
+    ps->tickets[i] = p->tickets;
+    ps->ticks[i] = p->ticks;
   }
 }

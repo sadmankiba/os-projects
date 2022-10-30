@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "pstat.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -283,14 +284,48 @@ create(char *path, short type, short major, short minor)
 }
 
 int
+mystrcmp(const char *p, const char *q)
+{
+  while(*p && *p == *q)
+    p++, q++;
+  return (uchar)*p - (uchar)*q;
+}
+
+int
 sys_settickets(void)
 {
+  char *numstr = "";
+  struct proc *curproc = myproc();
+  
+  begin_op();
+  if(argstr(0, &numstr) < 0){
+    end_op();
+    return -1;
+  }
+  if (mystrcmp(numstr, "0") == 0)
+    curproc->tickets = 0;
+  else if (mystrcmp(numstr, "0") == 0)
+    curproc->tickets = 1;
+  else {
+    end_op();
+    return -1;
+  }
+  
   return 0;
 }
+struct pstat pst;
 
 int 
 sys_getpinfo(void)
 {
+  struct pstat * ps;
+  
+  begin_op();
+  if (argptr(0, (void *)&ps, sizeof(*ps)) < 0) {
+    end_op();
+    return -1;
+  }
+  procinfo(ps);
   return 0;
 }
 
