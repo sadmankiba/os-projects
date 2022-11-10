@@ -9,8 +9,9 @@ int main (int argc, char *argv[]) {
     // FILE *fw = fopen("output_my", "wb");
     
     char ERRMSG[30] = "An error has occurred\n";
+    int wr;
     if (argc != 3 || access(argv[1], R_OK) != 0) {
-        write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));	
+        wr = write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));	
         exit(0);
     }
     FILE *fr = fopen(argv[1], "rb");
@@ -24,7 +25,7 @@ int main (int argc, char *argv[]) {
 	}
         else {
 	    if (n == 0){
-                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+                wr = write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
 		exit(0);
 	    }
 	    break;
@@ -50,8 +51,10 @@ int main (int argc, char *argv[]) {
         // printf("%d ", arr[i * 25]);
     }
 
-    fwrite(arr, sizeof(int), n * 25, fw);
-    
+    wr = fwrite(arr, sizeof(int), n * 25, fw);
+    if (wr != n * 25) {
+        exit(0);
+    }	
     fclose(fr);
     fclose(fw);
 
