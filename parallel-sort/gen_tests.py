@@ -1,6 +1,7 @@
 import sys
 import random
 import argparse
+import time
 from math import ceil
 
 
@@ -20,7 +21,7 @@ def main(args):
         return
     
     # Initialize generator and space to store generated things
-    gen_object = lcg(pow(2,31) + 1, 75, 74, 1)
+    gen_object = lcg(pow(2,31) + 1, 75, 74, int((time.time() * 10000) % 10000))
     entries = [] 
     map_of_entries = {} # Have to have 2 data structures
                         # b/c Python3 automatically sorts dicts
@@ -31,6 +32,8 @@ def main(args):
             exit
         else:
             map_of_entries[i]  = len(entries)
+        
+        print(i)
         tup = (i, bytearray(random.getrandbits(8) for _ in range(96))) # 96 random bytes
         entries.append(tup)
         if(len(entries) == num_entries): # End when we hit the desired number of entries
