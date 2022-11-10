@@ -1,20 +1,34 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
 int main (int argc, char *argv[]) {
     // FILE *fr = fopen("input", "rb");
     // FILE *fw = fopen("output_my", "wb");
-
+    
+    char ERRMSG[30] = "An error has occurred\n";
+    if (argc != 3 || access(argv[1], R_OK) != 0) {
+        write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));	
+        exit(0);
+    }
     FILE *fr = fopen(argv[1], "rb");
     FILE *fw = fopen(argv[2], "wb");
-    int arr[1000 * 25];
+    int arr[10000 * 25];
     
     int n = 0;
     while (true) {
         if (fread(&(arr[n * 25]), sizeof(int), 25, fr) == 25) {
 	    n++;
 	}
-        else break;
+        else {
+	    if (n == 0){
+                write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+		exit(0);
+	    }
+	    break;
+	}
 
 	// printf("%d ", arr[(n - 1) * 25]);
     }
