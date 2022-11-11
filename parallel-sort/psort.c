@@ -16,7 +16,8 @@ int main (int argc, char *argv[]) {
     }
     FILE *fr = fopen(argv[1], "rb");
     FILE *fw = fopen(argv[2], "wb");
-    int arr[10000 * 25];
+    int *arr = (int *) malloc(100000 * 25 * sizeof(int));
+    // int arr[10000 * 25];
     
     int n = 0;
     while (true) {
