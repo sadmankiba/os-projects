@@ -82,6 +82,44 @@ void bubbleSort(int *arr, int n) {
             }
 }
 
+void merge25(int *arr, int p, int q, int r) {
+    // L = A[p..q]. M = A[q+1..r]
+    int n1 = q - p + 1;
+    int n2 = r - q;
+
+    int L[n1 * 25], M[n2 * 25];
+
+    for (int i = 0; i < n1 * 25; i++)
+        L[i] = arr[p * 25 + i];
+    for (int j = 0; j < n2 * 25; j++)
+        M[j] = arr[(q + 1) * 25 + j];
+
+    int i, j, k;
+    i = 0; j = 0; k = p;
+
+    // Copy larger until we reach end of L or M
+    while (i < n1 && j < n2) {
+        if (L[i * 25] <= M[j * 25]) {
+            for (int h = 0; h < 25; h++)
+                arr[k * 25 + h] = L[i * 25 + h];
+            i++;
+        } else {
+            arr[k] = M[j];
+            j++;
+        }
+        k++;
+    }
+
+    // Copy remaining
+    while (i < n1) {
+        arr[k] = L[i]; i++; k++;
+    }
+
+    while (j < n2) {
+        arr[k] = M[j]; j++; k++;
+    }
+}
+
 void merge(int *arr, int p, int q, int r) {
     // L = A[p..q]. M = A[q+1..r]
     int n1 = q - p + 1;
