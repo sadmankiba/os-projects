@@ -3,6 +3,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
+
+void mergeSort(int *arr, int l, int r);
+void bubbleSort(int *arr, int n);
+void merge(int *arr, int p, int q, int r);
 
 int main (int argc, char *argv[]) {
     // FILE *fr = fopen("input", "rb");
@@ -16,27 +21,55 @@ int main (int argc, char *argv[]) {
     }
     FILE *fr = fopen(argv[1], "rb");
     FILE *fw = fopen(argv[2], "wb");
-    int *arr = (int *) malloc(100000 * 25 * sizeof(int));
+    int *arr = (int *) malloc(1000000 * 25 * sizeof(int)); // 100MB
     // int arr[10000 * 25];
     
     int n = 0;
     while (true) {
         if (fread(&(arr[n * 25]), sizeof(int), 25, fr) == 25) {
-	    n++;
-	}
-        else {
-	    if (n == 0){
-                wr = write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
-		exit(0);
+	        n++;
 	    }
-	    break;
-	}
-
-	// printf("%d ", arr[(n - 1) * 25]);
+        else {
+            if (n == 0){
+                wr = write(STDERR_FILENO, ERRMSG, strlen(ERRMSG));
+                exit(0);
+            }
+            break;
+	    }
+        if (n == 1000000)
+            break;
     }
-    // printf("\n");
-    // printf("n = %d\n", n);
     
+    // mergeSort(arr, 0, n - 1);
+    bubbleSort(arr, n);
+    
+    for (int i = 0; i < n; i++) {
+        // printf("%d ", arr[i * 25]);
+    }
+
+    wr = fwrite(arr, sizeof(int), n * 25, fw);
+    if (wr != n * 25) {
+        exit(0);
+    }	
+    // printf("Elapsed time: %lu secs.\n", clock() / CLOCKS_PER_SEC);
+
+    fclose(fr);
+    fclose(fw);
+
+    return 0;
+}
+
+void mergeSort(int *arr, int l, int r) {
+    if (l < r) {
+        int m = l + (r - l) / 2;
+
+        mergeSort(arr, l, m);
+        mergeSort(arr, m + 1, r);
+        merge(arr, l, m, r);
+    }
+}
+
+void bubbleSort(int *arr, int n) {
     int temp[25];
     for(int j = 0; j < (n - 1); j++)
         for (int i = 0; i < (n - 1); i++)
@@ -47,17 +80,42 @@ int main (int argc, char *argv[]) {
                     arr[(i + 1) * 25 + k] = temp[k];
                 }
             }
-    
-    for (int i = 0; i < n; i++) {
-        // printf("%d ", arr[i * 25]);
+}
+
+void merge(int *arr, int p, int q, int r) {
+    // L = A[p..q]. M = A[q+1..r]
+    int n1 = q - p + 1;
+    int n2 = r - q;
+
+    int L[n1], M[n2];
+
+    for (int i = 0; i < n1; i++)
+        L[i] = arr[p + i];
+    for (int j = 0; j < n2; j++)
+        M[j] = arr[q + 1 + j];
+
+    int i, j, k;
+    i = 0; j = 0; k = p;
+
+    // Copy larger until we reach end of L or M
+    while (i < n1 && j < n2) {
+        if (L[i] <= M[j]) {
+            arr[k] = L[i];
+            i++;
+        } else {
+            arr[k] = M[j];
+            j++;
+        }
+        k++;
     }
 
-    wr = fwrite(arr, sizeof(int), n * 25, fw);
-    if (wr != n * 25) {
-        exit(0);
-    }	
-    fclose(fr);
-    fclose(fw);
+    // Copy remaining
+    while (i < n1) {
+        arr[k] = L[i]; i++; k++;
+    }
 
-    return 0;
+    while (j < n2) {
+        arr[k] = M[j]; j++; k++;
+    }
 }
+
