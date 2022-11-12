@@ -4,14 +4,16 @@
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
+#include <assert.h>
 
 void mergeSort(int *arr, int l, int r);
 void bubbleSort(int *arr, int n);
+void merge25(int *arr, int p, int q, int r); 
 void merge(int *arr, int p, int q, int r);
 
 int main (int argc, char *argv[]) {
-    // FILE *fr = fopen("input", "rb");
-    // FILE *fw = fopen("output_my", "wb");
+    // FILE *fr = fopen("hndrdk-in", "rb");
+    // FILE *fw = fopen("hndrdk-my-out", "wb");
     
     char ERRMSG[30] = "An error has occurred\n";
     int wr;
@@ -22,7 +24,6 @@ int main (int argc, char *argv[]) {
     FILE *fr = fopen(argv[1], "rb");
     FILE *fw = fopen(argv[2], "wb");
     int *arr = (int *) malloc(1000000 * 25 * sizeof(int)); // 100MB
-    // int arr[10000 * 25];
     
     int n = 0;
     while (true) {
@@ -40,8 +41,8 @@ int main (int argc, char *argv[]) {
             break;
     }
     
-    // mergeSort(arr, 0, n - 1);
-    bubbleSort(arr, n);
+    mergeSort(arr, 0, n - 1);
+    // bubbleSort(arr, n);
     
     for (int i = 0; i < n; i++) {
         // printf("%d ", arr[i * 25]);
@@ -65,7 +66,7 @@ void mergeSort(int *arr, int l, int r) {
 
         mergeSort(arr, l, m);
         mergeSort(arr, m + 1, r);
-        merge(arr, l, m, r);
+        merge25(arr, l, m, r);
     }
 }
 
@@ -87,7 +88,8 @@ void merge25(int *arr, int p, int q, int r) {
     int n1 = q - p + 1;
     int n2 = r - q;
 
-    int L[n1 * 25], M[n2 * 25];
+    int *L = (int *) malloc(n1 * 25 * sizeof(int));
+    int *M = (int *) malloc(n2 * 25 * sizeof(int));
 
     for (int i = 0; i < n1 * 25; i++)
         L[i] = arr[p * 25 + i];
@@ -104,7 +106,8 @@ void merge25(int *arr, int p, int q, int r) {
                 arr[k * 25 + h] = L[i * 25 + h];
             i++;
         } else {
-            arr[k] = M[j];
+            for (int h = 0; h < 25; h++)
+                arr[k * 25 + h] = M[j * 25 + h];
             j++;
         }
         k++;
@@ -112,12 +115,19 @@ void merge25(int *arr, int p, int q, int r) {
 
     // Copy remaining
     while (i < n1) {
-        arr[k] = L[i]; i++; k++;
+        for (int h = 0; h < 25; h++)
+            arr[k * 25 + h] = L[i * 25 + h];
+             
+        i++; k++;
     }
 
     while (j < n2) {
-        arr[k] = M[j]; j++; k++;
+        for (int h = 0; h < 25; h++)
+            arr[k * 25 + h] = M[j * 25 + h];
+            
+        j++; k++;
     }
+    assert(k == r + 1);
 }
 
 void merge(int *arr, int p, int q, int r) {
