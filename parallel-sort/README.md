@@ -1,3 +1,3 @@
 # Parallel Sort 
 
-Used single thread and bubble sort.
+Used single thread and merge sort.
