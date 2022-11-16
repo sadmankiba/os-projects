@@ -8,6 +8,8 @@ For OS X, see https://pdos.csail.mit.edu/6.828/2011/tools.html. Download `binuti
 
 Then, run simulator: `make qemu` or `make qemu-nox`. Gives you a shell in a custom filesystem of XV6.
 
+Shell doesn't take `exit` command. So, I kill it as `kill -9 <pid of make qemu-nox>`. Then, `make clean`. 
+
 ## Code Structure
 The source code can be roughly devided into user space and kernel space code.  
 
@@ -29,7 +31,7 @@ System calls are performed in `syscall.c`. It reads `eax` register and calls the
 
 ## Exercise Solutions
 
-### P1
+### P1 - hello
 
 hello.c
 
@@ -46,3 +48,26 @@ main(int argc, char *argv[])
 ```
 
 Add `_hello` to UPROGS in Makefile. Build and run emulator. You can now run `$ hello <name>` in shell.
+
+### P2 - fork 
+
+checkfork.c
+```c
+#include "types.h"
+#include "user.h"
+
+int
+main(int argc, char *argv[])
+{
+  int pid = fork();
+  if (pid == 0) {
+    printf(1, "In child...\n");
+    exit();
+  }
+  wait();
+  printf(1, "Child finished. In parent...\n");
+  exit();
+}
+```
+
+Run same as P1 sol.

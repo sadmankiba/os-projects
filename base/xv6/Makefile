@@ -167,6 +167,7 @@ mkfs: mkfs.c fs.h
 
 UPROGS=\
 	_cat\
+	_checkfork\
 	_echo\
 	_forktest\
 	_grep\
