@@ -21,11 +21,15 @@ System calls from user space are declared in `user.h` and are defined in assembl
 ### Kernel Space 
 System calls are performed in `syscall.c`. It reads `eax` register and calls the appropriate syscall handler. `sysfile.c` also defines functions to retrieve arguments from stack for syscalls. Syscall handlers in kernel space are defined in `sysfile.c` with functions like `sys_open`, `sys_mkdir` etc.. 
 
+`proc.c` contains process-related methods such as `userinit` to create init process, `fork` etc. `proc.h` contains process state struct `proc`. 
+
 ## Exercises
 
 ### P1. Write a user-level program that prints "hello <name>".
 
 ### P2. Write a user-level program that uses `fork()` and `wait()`. 
+
+### P3. Add a system call. 
 
 
 
