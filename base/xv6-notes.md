@@ -6,7 +6,7 @@ Build:
 `make`.
 For OS X, see https://pdos.csail.mit.edu/6.828/2011/tools.html. Download `binutils` and install.
 
-Run simulator: `make qemu` or `make qemu-nox`. Gives you a shell in a custom filesystem of XV6.
+Then, run simulator: `make qemu` or `make qemu-nox`. Gives you a shell in a custom filesystem of XV6.
 
 ## Code Structure
 The source code can be roughly devided into user space and kernel space code.  
@@ -23,6 +23,26 @@ System calls are performed in `syscall.c`. It reads `eax` register and calls the
 
 ### P1. Write a user-level program that prints "hello <name>".
 
+### P2. Write a user-level program that uses `fork()` and `wait()`. 
 
 
-### P2. Write a user-level program that uses `fork()` and `wait()`.  
+
+## Exercise Solutions
+
+### P1
+
+hello.c
+
+```c
+#include "types.h"
+#include "user.h"
+
+int
+main(int argc, char *argv[])
+{
+  printf(1, "hello %s\n", argv[1]);
+  exit();
+}
+```
+
+Add `_hello` to UPROGS in Makefile. Build and run emulator. You can now run `$ hello <name>` in shell.

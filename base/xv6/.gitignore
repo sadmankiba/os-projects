@@ -20,3 +20,7 @@ vectors.S
 Makefile.test
 test*.c
 tests-out/
+
+# System files
+
+.__afs*
