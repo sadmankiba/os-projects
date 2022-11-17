@@ -13,16 +13,17 @@ sys_clone(void)
         void *a1, *a2, *a3;
         void(*f)(void *, void *);
         if(argptr(1, (void*)&a1, sizeof(a1)) < 0){
-return -1;
+          return -1;
         }
         if(argptr(2, (void*)&a2, sizeof(a2)) < 0){
-return -1;
+          return -1;
         }
         if(argptr(3, (void*)&a3, sizeof(a3)) < 0){
-return -1;
+          return -1;
         }
         if(argptr(0, (void*)&f, sizeof(f)) < 0){
                 return -1;
+        }
         return clone(f, a1, a2, a3);
 }
 
