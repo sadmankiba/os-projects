@@ -8,6 +8,18 @@
 #include "proc.h"
 
 int
+sys_clone(void)
+{
+  return clone();
+}
+
+int 
+sys_join(void)
+{
+  return join();
+}
+
+int
 sys_fork(void)
 {
   return fork();

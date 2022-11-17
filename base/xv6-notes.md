@@ -31,8 +31,6 @@ System calls are performed in `syscall.c`. It reads `eax` register and calls the
 
 ### P3. Add a system call. 
 
-
-
 ## Exercise Solutions
 
 ### P1 - hello
@@ -75,3 +73,7 @@ main(int argc, char *argv[])
 ```
 
 Run same as P1 sol.
+
+### P3
+
+user.h, usys.S, syscall.h, syscall.c, sysfile.c, proc.c
