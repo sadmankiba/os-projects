@@ -38,10 +38,10 @@ struct cpu*
 mycpu(void)
 {
   int apicid, i;
-  
+
   if(readeflags()&FL_IF)
     panic("mycpu called with interrupts enabled\n");
-  
+
   apicid = lapicid();
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
   // a reverse map, or reserve a register to store &cpus[i].
@@ -51,7 +51,6 @@ mycpu(void)
   }
   panic("unknown apicid\n");
 }
-
 // Disable interrupts so that we are not rescheduled
 // while reading proc from the cpu structure
 struct proc*
@@ -105,7 +104,7 @@ found:
   // Set up new context to start executing at forkret,
   // which returns to trapret.
   sp -= 4;
-  *(uint*)sp = (uint)trapret;
+ *(uint*)sp = (uint)trapret;
 
   sp -= sizeof *p->context;
   p->context = (struct context*)sp;
@@ -124,7 +123,7 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   p = allocproc();
-  
+
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
@@ -138,7 +137,6 @@ userinit(void)
   p->tf->eflags = FL_IF;
   p->tf->esp = PGSIZE;
   p->tf->eip = 0;  // beginning of initcode.S
-
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
@@ -160,57 +158,95 @@ growproc(int n)
 {
   uint sz;
   struct proc *curproc = myproc();
+  struct proc *p;
+  int result = 0;
 
   sz = curproc->sz;
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
-      return -1;
+      result = -1;
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
-      return -1;
+      result = -1;
   }
-  curproc->sz = sz;
+  acquire(&ptable.lock);
+  if(result == 0){
+        curproc->sz = sz;
+        for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+                 if(p->pgdir == curproc->pgdir){
+                          p->sz = curproc->sz;
+                }
+        }
+  }
+  release(&ptable.lock);
   switchuvm(curproc);
   return 0;
 }
 
-int 
+// Clone function
+int
 clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
 {
+
+  int i, pid;
+  struct proc *curproc = myproc();
+  struct proc *np;
+
   // check if user stack is page alligned
-  if((int)stack % PGSIZE != 0){
-          // stack += (PGSIZE - ((int)stack % PGSIZE));
+  if((uint)stack % PGSIZE != 0){
           return -1;
   }
-  int i, pid;
-  struct proc *np;
-  struct proc *curproc = myproc();
-  // Allocate process.
+
+  // check that stack lies within process address space
+  if((uint)stack < curproc->sz){
+          return -1;
+  }
+ // Allocate process.
   if((np = allocproc()) == 0){
-return -1; }
-  // Copy process state from proc.
-  np->pgdir = curproc->pgdir;
-  np->sz = curproc->sz;
+    return -1;
+  }
+
+
+  // give same size and address space
   np->parent = curproc;
-  *np->tf = *curproc->tf;
-  np->tf->ebp = (int)stack + PGSIZE -12;
-  np->tf->esp = (int)stack + PGSIZE -12;
-  void *temp = (void*)0xffffffff;
-  // set up stack and arguments for process
-  memmove((stack+PGSIZE)-sizeof(void *), &arg2, sizeof(void *));
-  memmove((stack+PGSIZE)-sizeof(void *), &arg1, sizeof(void *));
-  memmove((stack+PGSIZE)-sizeof(void *), &temp, sizeof(void *));
-  np->tf->eax = 0;
-  np->tf->eip = (int)fcn;
+  np->sz = curproc->sz;
+  np->pgdir = curproc->pgdir;
+
+  // start the new stack at top
+  uint *new_stack = (uint *) (((uint) stack) + PGSIZE);
+  new_stack -= 1;
+  *new_stack = (uint)arg2;
+  new_stack -= 1;
+  *new_stack = (uint)arg1;
+  new_stack -= 1;
+
+  // create a buffer for fcn
+  void *temp = (void *)0xffffffff;
+  *new_stack = (uint)temp;
+
+  *np->tf = *curproc->tf;  // copy parent and child trapframes to be the same
+
+  np->tf->eax = 0; // clear eax
+  np->tf->eip = (uint) fcn;  // put fcn in eip
+  np->tf->esp = (uint) new_stack;  // load stack pointer into esp
+
+
+  // rest is from fork, no change needed
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
   np->cwd = idup(curproc->cwd);
+
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
   pid = np->pid;
-acquire(&ptable.lock);
+
+  acquire(&ptable.lock);
+
   np->state = RUNNABLE;
+
   release(&ptable.lock);
+
   return pid;
 }
 
@@ -220,21 +256,22 @@ join(void **stack)
   struct proc *p;
   int havekids, pid;
   struct proc *curproc = myproc();
+
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
+      if(p->parent != curproc || curproc->pgdir != p->pgdir) // added to make sure pgdir are the same
         continue;
       havekids = 1;
-      if(p->state == ZOMBIE && p->pgdir == curproc->pgdir){
+      if(p->state == ZOMBIE){
         // Found one.
         pid = p->pid;
-        *stack = p->kstack;
+        // different from wait here, actually create the stack to be used
+        *stack = (void *) PGROUNDDOWN(p->tf->esp);
         kfree(p->kstack);
         p->kstack = 0;
-        freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
@@ -242,12 +279,15 @@ join(void **stack)
         p->state = UNUSED;
         release(&ptable.lock);
         return pid;
-      }   
+      }
     }
+
     // No point waiting if we don't have any children.
     if(!havekids || curproc->killed){
-        release(&ptable.lock);
-        return -1; }
+      release(&ptable.lock);
+      return -1;
+    }
+
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
@@ -255,7 +295,7 @@ join(void **stack)
 
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
-// Caller must set state of returned proc to RUNNABLE.
+// Caller must set state of returned proc to RUNN
 int
 fork(void)
 {
@@ -299,7 +339,6 @@ fork(void)
 
   return pid;
 }
-
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.
@@ -330,7 +369,6 @@ exit(void)
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
-  // wakeup1(curproc);
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -346,23 +384,22 @@ exit(void)
   sched();
   panic("zombie exit");
 }
-
-
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 int
 wait(void)
 {
   struct proc *p;
+  struct proc *np;
   int havekids, pid;
   struct proc *curproc = myproc();
-  
+
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc || p->pgdir == curproc->pgdir)
+      if(p->parent != curproc || p->pgdir == curproc->pgdir)  // make sure pgdir are different
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
@@ -370,7 +407,13 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
-        freevm(p->pgdir);
+        // loop through all processes and make sure addr space shared
+        for(np = ptable.proc; np < &ptable.proc[NPROC]; np++){
+                if(np != p && np->pgdir == p->pgdir){
+                        freevm(p->pgdir);
+                }
+        }
+        p->pgdir = 0;
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
@@ -391,7 +434,6 @@ wait(void)
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
 }
-
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -406,7 +448,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
@@ -435,7 +477,6 @@ scheduler(void)
 
   }
 }
-
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
@@ -489,8 +530,7 @@ forkret(void)
     iinit(ROOTDEV);
     initlog(ROOTDEV);
   }
-
-  // Return to "caller", actually trapret (see allocproc).
+// Return to "caller", actually trapret (see allocproc).
 }
 
 // Atomically release lock and sleep on chan.
@@ -499,7 +539,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
   if(p == 0)
     panic("sleep");
 
@@ -531,7 +571,6 @@ sleep(void *chan, struct spinlock *lk)
     acquire(lk);
   }
 }
-
 //PAGEBREAK!
 // Wake up all processes sleeping on chan.
 // The ptable lock must be held.
@@ -576,7 +615,6 @@ kill(int pid)
   release(&ptable.lock);
   return -1;
 }
-
 //PAGEBREAK: 36
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
@@ -613,3 +651,4 @@ procdump(void)
     cprintf("\n");
   }
 }
+
