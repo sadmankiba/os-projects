@@ -172,6 +172,7 @@ UPROGS=\
 	_forktest\
 	_grep\
 	_test_1\
+	_test_4\
 	_hello\
 	_init\
 	_kill\

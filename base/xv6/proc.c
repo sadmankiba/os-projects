@@ -199,9 +199,10 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
   }
 
   // check that stack lies within process address space
-  // if((uint)stack < curproc->sz){
-  //         return -1;
-  // }
+  if((curproc->sz - (uint) stack) < PGSIZE){
+    return -1;
+  }
+
  // Allocate process.
   if((np = allocproc()) == 0){
     return -1;

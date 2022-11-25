@@ -26,7 +26,7 @@ Shell doesn't take `exit` command. So, kill it as `killall -r qemu` or `kill -9 
 
 **Debug**
 - In xv6, use cprintf to print your sentences.
-- To debug with gdb, run `make qemu-nox-gdb` or `make qemu-gdb` in one terminal, and `gdb` in another terminal.
+- To debug with gdb, run `make qemu-nox-gdb` or `make qemu-gdb` in one terminal go to xv6 directory, and `gdb` in another terminal.
 - add auto-load-save-path.
 
 ## Code Structure
