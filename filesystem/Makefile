@@ -2,7 +2,8 @@ CC     := gcc
 CFLAGS := -Wall -Werror 
 
 SRCS   := client.c \
-	server.c 
+	server.c \
+	mkfs.c
 
 OBJS   := ${SRCS:c=o}
 PROGS  := ${SRCS:.c=}
