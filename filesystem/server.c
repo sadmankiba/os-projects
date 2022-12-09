@@ -28,6 +28,11 @@ int main(int argc, char *argv[]) {
         printf("Read message: %s, size: %d\n", message, rc);
         if(strcmp(message, "wr") == 0) {
             printf("Write..\n");
+            // get inum, buf, offset, size
+            // increase dir len
+            // do we actually write data? probably yes. 
+            // for extending a file over a block, we might need to use 
+            // multiple pointers
         } else if (strcmp(message, "rd") == 0) {
             printf("Read..\n"); 
         }
