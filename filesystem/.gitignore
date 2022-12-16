@@ -1,5 +1,10 @@
 *.o
+libmfs.so
 client
 server
+server-sm
+client-app
+test.img
+runtests.log
 mkfs
 fs

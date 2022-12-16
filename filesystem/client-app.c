@@ -4,9 +4,7 @@
 #include "message.h"
 #include "ufs.h"
 
-int
-main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 
 	// initialize the server
 	MFS_Init("localhost", 3004);
@@ -14,34 +12,34 @@ main(int argc, char *argv[])
 
 	// loop through
 	for(int i = 0; i < 1; i++) {
-	  int index = i;
+		int index = i;
 
-	  // create a string
-	  char str[15];
+		// create a string
+		char str[15];
 
-	  sprintf(str, "%d", index);
-	  
-	  // creat file;
-	  rc = MFS_Creat(0, MFS_DIRECTORY, str);
-	  if(rc < 0){
-	    exit(0);
-	  }
+		sprintf(str, "%d", index);
+		
+		// creat file;
+		rc = MFS_Creat(0, MFS_DIRECTORY, str);
+		if(rc < 0){
+			exit(0);
+		}
 
-	  // test for lookup
-	  rc = MFS_Lookup(1, ".");
-	  rc = MFS_Lookup(1, "..");
+		// test for lookup
+		rc = MFS_Lookup(1, ".");
+		rc = MFS_Lookup(1, "..");
 
 
-	// full creat test
-	rc = MFS_Creat(0, MFS_REGULAR_FILE, "test");
-	if(rc < 0){
-		exit(0);
+		// full creat test
+		rc = MFS_Creat(0, MFS_REGULAR_FILE, "test");
+		if(rc < 0){
+			exit(0);
+		}
+
+		rc = MFS_Lookup(1, ".");
+		rc = MFS_Lookup(1, "..");
+
 	}
-
-          rc = MFS_Lookup(1, ".");
-	  rc = MFS_Lookup(1, "..");
-
-}
 
 	int inum2 = MFS_Lookup(0, "test_dir");
 	if(inum2 < 0){
