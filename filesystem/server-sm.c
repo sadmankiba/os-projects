@@ -89,7 +89,7 @@ int get_inode(int pinum, char* name){
   char data_buf[4096]; 
 
   for(i=0; i< 14; i++) {
-
+    debug("In get_inode: reading direct block %d\n", i);
     int fp_block = nd.direct[i];	
     if(fp_block == -1) continue;
 
@@ -99,9 +99,10 @@ int get_inode(int pinum, char* name){
     Block_t* dir_buf = (Block_t*)data_buf;
     for(j=0; j<DIR_ENTRIES_IN_BLOCK; j++) {
       MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
-      if(strncmp(p_de->name,name,60) == 0)
+      if(strncmp(p_de->name,name,60) == 0) {
 	      debug("In get_inode: found file. inum %d\n", p_de->inum);
         return p_de->inum;
+      }
     }
   }
   debug("In get_inode: file not found. returning -1\n");
