@@ -12,12 +12,14 @@
 #include "udp.h"
 #include "message.h"
 #include "ufs.h"
+#include "debug.h"
 
 int fd = -1;
 track_t* p_cr = NULL;
 
 // set up the needed functions
-int initialize_serv(int , char* );
+int initialize_serv(char* );
+int run_udp(int);
 int get_inode(int, char* );
 int set_inode(int , MFS_Stat_t* );
 int write_to(int , char* , int );
@@ -34,17 +36,32 @@ getInode function: takes inum, returns inode_t.
     - inode_addr = super.inode_reg_addr * block_size + inode-num * sizeof(inode)
     - FsImg.read(inode_addr, sizeof(inode))
 */
-int get_inode(int pinum, char* name){
 
+/*
+get_inode(lookupFile) function: Find a file in a parent directory
+params: parent-inum, file-name, 
+returns: file inode number if found, -1 if not found
+  - Get inode from parent inum (getInode).
+  - Get data block addresses from inode.direct. 
+  - Loop through all direct addresses.
+      - Start from a data block addr and read data until 
+          file found or block end reached.
+          - Read sizeof(dir_ent_t) bytes and cast to dir_ent_t struct
+          - If name matches file name from client, break
+  - Return entry address of found file or err if file not found
+*/
+int get_inode(int pinum, char* name){
+  debug("In get_inode: pinum %d, name %s\n", pinum, name);
   int i=0, j=0, k=0, l=0;
 
+  // Get parent inode
   k = pinum / 16; 
   if(p_cr->node_array[k] == -1){
     perror("get_inode: invalid pinum_2");
+    debug("In get_inode: parent inode does not exist. returning -1.");
     return -1;
   }
   int fp_mp =  p_cr->node_array[k];
-
 
   l = pinum % 16; 
   N_Trace mp;
@@ -55,14 +72,19 @@ int get_inode(int pinum, char* name){
   inode_t nd;
   lseek(fd, fp_nd, SEEK_SET);
   read(fd, &nd, sizeof(inode_t));
+  debug("In get_inode: Found parent inode\n");
+
   /* assert dir */
   if(nd.type != MFS_DIRECTORY) {
     perror("get_inode: invalid pinum_4");
+    debug("In get_inode: parent inode is not directory. returning -1.");
     return -1;
   }
+
+  // Iterate over dir entries in data block of parent 
   int fp_data = nd.direct[0];  
   int sz_data = nd.size;
-  int num_blocks = sz_data / 4096 + 1;
+  int num_blocks = sz_data / 4096 + 1; // assuming last direct block not full
 
   char data_buf[4096]; 
 
@@ -71,17 +93,18 @@ int get_inode(int pinum, char* name){
     int fp_block = nd.direct[i];	
     if(fp_block == -1) continue;
 
-
     lseek(fd, fp_block, SEEK_SET);
-    read(fd, data_buf, 4096);
+    read(fd, data_buf, UFS_BLOCK_SIZE);
 	  
     Block_t* dir_buf = (Block_t*)data_buf;
-    for(j=0; j<64; j++) {
+    for(j=0; j<DIR_ENTRIES_IN_BLOCK; j++) {
       MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
       if(strncmp(p_de->name,name,60) == 0)
-	return p_de->inum;
+	      debug("In get_inode: found file. inum %d\n", p_de->inum);
+        return p_de->inum;
     }
   }
+  debug("In get_inode: file not found. returning -1\n");
   return -1;
 }
 
@@ -374,7 +397,21 @@ newInode function: takes type, returns inum
     - Write inode(type, size 0, direct=[block address])
     - Return inum
 */
-int new_file(int pinum, int type, char* name){
+/*
+- Get parent inum, new-file type, new-file name
+- If name >= 28 bytes, throw err
+- Get parent-inode from parent inum (getInode)
+- Get last-block addr from parent-inode.direct addresses
+- If last-block.free space < sizeof(dir_ent_t)
+    - add new data block to parent inum (addDataBlock)
+    - update last-block address in parent-inode (setInode)
+- Create new inode with type and get new-inum (newInode)
+- Create a dir_ent_t with name and new-inum
+- FsImg.write(last-block addr + parent.size % block_size, dir_ent_t, sizeof(dir_ent_t))
+- Update size of parent-inode (setInode)
+- Return success
+*/
+int new_file(int pinum, int type, char* name) {
 // interable vars
   int i=0;
   int j=0;
@@ -416,9 +453,7 @@ int new_file(int pinum, int type, char* name){
   int free_inum = -1;
   int is_free_inum_found = 0;
   for(i=0; i<256; i++) {
-
     fp_mp =  p_cr->node_array[i];
-
 
     if(fp_mp != -1) {
 
@@ -426,12 +461,12 @@ int new_file(int pinum, int type, char* name){
       lseek(fd, fp_mp, SEEK_SET);
       read(fd, &mp_par, sizeof(N_Trace));
       for(j=0; j<16; j++) {
-	fp_nd = mp_par.inodes[j]; 
-	if(fp_nd == -1) {
-	  free_inum = i*16 + j;
-	  is_free_inum_found = 1;
-	  break;
-	}
+        fp_nd = mp_par.inodes[j]; 
+        if(fp_nd == -1) {
+          free_inum = i*16 + j;
+          is_free_inum_found = 1;
+          break;
+        }
       }
     }
     else {
@@ -452,15 +487,14 @@ int new_file(int pinum, int type, char* name){
       fsync(fd);
 
       for(j=0; j<16; j++) {
-	fp_nd = mp_new.inodes[j]; 
-	if(fp_nd == -1) {
-	  free_inum = i*16 + j;
-	  is_free_inum_found = 1;
-	  break;
-	}
+        fp_nd = mp_new.inodes[j]; 
+        if(fp_nd == -1) {
+          free_inum = i*16 + j;
+          is_free_inum_found = 1;
+          break;
+        }
       }
     }
-
 
     if (is_free_inum_found) break;
   }
@@ -478,11 +512,10 @@ int new_file(int pinum, int type, char* name){
     fp_block = p_nd->direct[i];
     block_par = i;
     if(fp_block == -1) {
-
       Block_t* p_dir = (Block_t*) data_buf;
       for(i=0; i< 64; i++){
-	strcpy(p_dir->data_blocks[i].name, "\0");
-	p_dir->data_blocks[i].inum = -1;
+        strcpy(p_dir->data_blocks[i].name, "\0");
+        p_dir->data_blocks[i].inum = -1;
       }
       offset = p_cr->tfinal;
       step = 4096; 
@@ -532,10 +565,10 @@ int new_file(int pinum, int type, char* name){
     for(j=0; j<64; j++) {
       MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
       if(p_de->inum == -1) {
-	p_de->inum = free_inum;
-	strcpy(p_de->name, name);
-	flag_found_entry = 1;
-	break;
+        p_de->inum = free_inum;
+        strcpy(p_de->name, name);
+        flag_found_entry = 1;
+        break;
       }
     }
 
@@ -619,41 +652,41 @@ int new_file(int pinum, int type, char* name){
 
   }
 
-    inode_t nd_new;
-    nd_new.size = 0;		
-    nd_new.type = type;			  
-    for (i = 0; i < 14; i++) nd_new.direct[i] = -1;
-    if(type == MFS_DIRECTORY)
-      nd_new.direct[0] = offset;		
+  inode_t nd_new;
+  nd_new.size = 0;		
+  nd_new.type = type;			  
+  for (i = 0; i < 14; i++) nd_new.direct[i] = -1;
+  if(type == MFS_DIRECTORY)
+    nd_new.direct[0] = offset;		
 
-    offset = p_cr->tfinal;
-    step = sizeof(inode_t); 
-    p_cr->tfinal += step;
-    lseek(fd, offset, SEEK_SET);
-    write(fd, &nd_new, step);
+  offset = p_cr->tfinal;
+  step = sizeof(inode_t); 
+  p_cr->tfinal += step;
+  lseek(fd, offset, SEEK_SET);
+  write(fd, &nd_new, step);
 
 
-    N_Trace mp_new;
-    if(is_old_mp) {
-      for(i = 0; i< 16; i++) mp_new.inodes[i] = mp.inodes[i] ; 
-      mp_new.inodes[l] = offset;
-    }
-    else {
-      for(i = 0; i< 16; i++) mp_new.inodes[i] = -1 ; 
-      mp_new.inodes[l] = offset;
-    }
+  N_Trace mp_new;
+  if(is_old_mp) {
+    for(i = 0; i< 16; i++) mp_new.inodes[i] = mp.inodes[i] ; 
+    mp_new.inodes[l] = offset;
+  }
+  else {
+    for(i = 0; i< 16; i++) mp_new.inodes[i] = -1 ; 
+    mp_new.inodes[l] = offset;
+  }
 
-    offset = p_cr->tfinal;
-    step = sizeof(N_Trace);
-    p_cr->tfinal += step;
-    lseek(fd, offset, SEEK_SET);
-    write(fd, &mp_new, step);
+  offset = p_cr->tfinal;
+  step = sizeof(N_Trace);
+  p_cr->tfinal += step;
+  lseek(fd, offset, SEEK_SET);
+  write(fd, &mp_new, step);
 
-    p_cr->node_array[k] = offset; 
-    lseek(fd, 0, SEEK_SET);
-    write(fd, p_cr, sizeof(track_t));
+  p_cr->node_array[k] = offset; 
+  lseek(fd, 0, SEEK_SET);
+  write(fd, p_cr, sizeof(track_t));
 
-    fsync(fd);
+  fsync(fd);
 
   return 0;
 }
@@ -905,24 +938,13 @@ int print_dir(int pinum) {
 }
 
 
-/*
-lookupFile function: takes parent-inum, file-name, returns entry address
-    - Get inode from parent inum (getInode).
-    - Get data block addresses from inode.direct. 
-    - Loop through all direct addresses.
-        - Start from a data block addr and read data until 
-            file found or block end reached.
-            - Read sizeof(dir_ent_t) bytes and cast to dir_ent_t struct
-            - If name matches file name from client, break
-    - Return entry address of found file or err if file not found
-*/
 
-int initialize_serv(int port, char* image_path) {
 
+int initialize_serv(char* image_path) {
   fd = open(image_path, O_RDWR | O_CREAT, S_IRWXU);
 
   struct stat fs;
-  if(fstat(fd,&fs) < 0) {
+  if(fstat(fd, &fs) < 0) {
     perror("initialize_serv: Cannot open file");
   }
 
@@ -1002,6 +1024,10 @@ int initialize_serv(int port, char* image_path) {
     read(fd, p_cr, sizeof(track_t));
   }
 
+  return 0;
+}
+
+int run_udp(int port) {
   int sd=-1;
   if((sd =   UDP_Open(port))< 0){
     perror("initialize_serv: port open fail");
@@ -1083,20 +1109,6 @@ int initialize_serv(int port, char* image_path) {
 
     }
     else if(buf_pk.msg == MFS_CREAT){
-      /*
-            - Get parent inum, new-file type, new-file name
-            - If name >= 28 bytes, throw err
-            - Get parent-inode from parent inum (getInode)
-            - Get last-block addr from parent-inode.direct addresses
-            - If last-block.free space < sizeof(dir_ent_t)
-                - add new data block to parent inum (addDataBlock)
-                - update last-block address in parent-inode (setInode)
-            - Create new inode with type and get new-inum (newInode)
-            - Create a dir_ent_t with name and new-inum
-            - FsImg.write(last-block addr + parent.size % block_size, dir_ent_t, sizeof(dir_ent_t))
-            - Update size of parent-inode (setInode)
-            - Return success
-            */
       rx_pk.node_num = new_file(buf_pk.node_num, buf_pk.mtype, buf_pk.name);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
@@ -1135,21 +1147,19 @@ int initialize_serv(int port, char* image_path) {
       perror("invalid MFS function");
       return -1;
     }
-
-
   }
 
   return 0;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	if(argc != 3) {
 		perror("Usage: server <portnum> <image>\n");
 		exit(1);
 	}
 
-	initialize_serv(atoi(argv[1]),argv[2] );
+	initialize_serv(argv[2]);
+  run_udp(atoi(argv[1]));
 
 	return 0;
 }

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include "udp.h"
 #include "mfs.c"
 #include "message.h"
@@ -9,6 +10,10 @@ int main(int argc, char *argv[]) {
 	// initialize the server
 	MFS_Init("localhost", 3004);
 	int rc = -1;
+
+	assert(MFS_Lookup(0, "..") == 0);
+	assert(MFS_Lookup(0, "a.txt") == -1); 
+	return 0;
 
 	// loop through
 	for(int i = 0; i < 1; i++) {

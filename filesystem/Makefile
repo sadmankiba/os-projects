@@ -2,7 +2,6 @@ CC     := gcc
 CFLAGS := -Wall -Werror 
 
 SRCS   := client.c \
-	server.c \
 	mkfs.c
 
 OBJS   := ${SRCS:c=o}
@@ -17,11 +16,17 @@ ${PROGS} : % : %.o Makefile
 clean:
 	rm -f ${PROGS} ${OBJS}
 
-server-sm: server-sm.c udp.c
-	gcc server-sm.c -o server-sm udp.c
+server: server-sm.c udp.c message.h mfs.h Makefile
+	gcc server-sm.c -o server udp.c
 
-client-app: client-app.c udp.c
+server-dbg: server-sm.c udp.c message.h mfs.h Makefile
+	gcc -DDEBUG server-sm.c -o server udp.c
+
+client-app: client-app.c mfs.c udp.c 
 	gcc client-app.c udp.c -o client-app
+
+client-app-dbg: client-app.c mfs.c udp.c 
+	gcc -DDEBUG client-app.c udp.c -o client-app
 
 libmfs.so: mfs.c udp.c 
 	gcc -c -Wall -Werror -fpic mfs.c 

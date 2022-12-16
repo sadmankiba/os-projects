@@ -1,14 +1,16 @@
-#include "mfs.h"
 #include <unistd.h>
-#include "message.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h>
-#include "udp.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "mfs.h"
+#include "udp.h"
+#include "message.h"
+#include "debug.h"
 
 // this will send messages between the server and client that contain
 // a message_t struct that is updated by other methods
@@ -113,14 +115,17 @@ int MFS_Lookup(int pinum, char *name){
 
 	// make sure server is currently working
 	if(!working){
-                return -1;
-        }
+        return -1;
+    }
 
 	// create receiving message
 	message_t receive;
 
 	// send the message to the client
-	if(Server_To_Client( &send, &receive, my_serv, prt) <= -1){
+	int ret = Server_To_Client( &send, &receive, my_serv, prt);
+	debug("In MFS_Lookup: server retcode %d, received inum %d\n", ret, receive.node_num);
+		
+	if(ret <= -1){
 		return -1;
 	}
 	else{
