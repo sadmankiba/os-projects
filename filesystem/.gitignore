@@ -1,5 +1,5 @@
 *.o
-libmfs.so
+*.so
 client
 server
 server-sm
@@ -8,3 +8,9 @@ test.img
 runtests.log
 mkfs
 fs
+
+# test
+__pycache__/
+*.py~
+*.pyc
+*.bak
