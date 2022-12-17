@@ -196,26 +196,20 @@ int MFS_Write(int inum, char *buffer, int offset, int nbytes){
 }
 
 
-// MFS_Read function that reads based on inum, given buffer, offset, and number of bytes
-int MFS_Read(int inum, char *buffer, int offset, int nbytes){
-	// message to send	
+int MFS_Read(int inum, char *buffer, int offset, int nbytes){	
 	message_t send;
 
-	// send message fields are filled
 	send.nbytes = nbytes;
 	send.node_num = inum;
 	send.msg = MFS_READ;
 	send.offset = offset;
 
-	// always makes ure server is working!
 	if(!working){
-                return -1;
-        }
+        return -1;
+    }
 
-	// message to receeive
 	message_t receive;
 
-	// send the message!	
 	if(Server_To_Client(&send, &receive, my_serv, prt) <= -1){
 		return -1;
 	}
@@ -230,7 +224,6 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes){
 		}
 	}
 
-	// return the inode number of the recieved
 	return receive.node_num;
 }
 
@@ -307,18 +300,11 @@ int MFS_Unlink(int pinum, char *name){
 	return receive.node_num;
 }
 
-// MFS_Shutdown method, shutdown processes
 int MFS_Shutdown(){
-	// send message
 	message_t send;
-
-	// make sure it knows it's supposed to shutdown
 	send.msg = MFS_SHUTDOWN;
-
-	// recieve the shutdown message
 	message_t receive;
 
-	// transfer message
 	if(Server_To_Client(&send, &receive, my_serv, prt) <= -1){
 		return -1;
 	}

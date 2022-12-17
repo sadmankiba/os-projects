@@ -17,7 +17,6 @@ clean:
 	rm server 
 	rm client-app 
 	rm libmfs.so
-	rm fs
 
 server: server.c udp.c message.h mfs.h Makefile
 	$(CC) $(CFLAGS) server.c -o server udp.c -lm

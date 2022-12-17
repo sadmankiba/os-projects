@@ -106,7 +106,7 @@ dir_ent_t* lookup_file(int pinum, char* name){
       (nd.size % UFS_BLOCK_SIZE) / sizeof(dir_ent_t) :
       UFS_BLOCK_SIZE / (sizeof(dir_ent_t));
     
-    debug("In lookup_file: reading direct block %d from blk addr %d\n", i, nd.direct[i]);
+    debug("In lookup_file: reading direct block %d (addr %d entries %d)\n", i, nd.direct[i], ndes);
 
     dir_ent_t * de;
     for (int j = 0; j < ndes; j++) {
@@ -200,8 +200,6 @@ int write_file(int inum, char *buf, int offset, int nbytes) {
   return nbytes;
 }
 
-
-
 int alloc_dblk() {
   /* set in d-bitmap */
   unsigned int bits;
@@ -264,223 +262,6 @@ int unlink_file(int pinum, char *name) {
   return 0;
 }
 
-int set_inode(int inum, MFS_Stat_t* m){
-
-  int i=0, j=0, k=0, l=0;
-
-  if(inum < 0 || inum >= 4096) {
-    perror("set_inode: invalid inum_1");
-    return -1;
-  }
-
-  k = inum / 16; 
-  if(p_cr->node_array[k] == -1){
-    perror("set_inode: invalid inum_2");
-    return -1;
-  }
-  int fp_mp =  p_cr->node_array[k];
-
-
-  l = inum % 16;
-  N_Trace mp;
-  lseek(fd, fp_mp, SEEK_SET);
-  read(fd, &mp, sizeof(N_Trace));
-  int fp_nd = mp.inodes[l];
-  if(fp_nd == -1) {
-    perror("set_inode: invalid inum_3");
-    return -1;
-  }
-
-  inode_t nd;
-  lseek(fd, fp_nd, SEEK_SET);
-  read(fd, &nd, sizeof(inode_t));
-
-
-  m->size = nd.size;
-  m->type = nd.type;
-
-  return 0;
-}
-
-int write_to(int inum, char* buffer, int block){
-
-  int i=0, j=0, k=0, l=0;
-  int offset = 0, step =0;
-  int is_old_mp = 0, is_old_nd = 0, is_old_block = 0;
-  int fp_mp = -1, fp_nd = -1, fp_block = -1;
-
-  inode_t nd;
-  N_Trace mp;
-
-  if(inum < 0 || inum >= 4096) {
-    perror("write_to: invalid inum_1");
-    return -1;
-  }
-
-
-  if( block < 0 || block > 14 - 1) {
-    perror("write_to: invalid block_5");
-    return -1;
-  }
-
-  char* ip = NULL;
-  char wr_buffer[ 4096 ];
-
-  for(i=0, ip=buffer; i<4096; i++) {
-    if( ip != NULL ) {
-      wr_buffer[i] = *ip;
-      ip++;
-    } 
-    else {
-      wr_buffer[i] = '\0';
-    }
-  }
-
-  offset = p_cr->tfinal;
-
-  k = inum / 16; 
-  fp_mp =  p_cr->node_array[k];
-  if(fp_mp != -1){
-
-    is_old_mp = 1;
-
-    l = inum % 16; 
-
-    lseek(fd, fp_mp, SEEK_SET);
-    read(fd, &mp, sizeof(N_Trace));
-    fp_nd = mp.inodes[l]; 
-  }
-
-
-  if(fp_nd != -1 && is_old_mp) { 
-
-    is_old_nd = 1;
-
-    lseek(fd, fp_nd, SEEK_SET);
-    read(fd, &nd, sizeof(inode_t));
-
-    if(nd.type != MFS_REGULAR_FILE) {
-      perror("write_to: not a regular file_4");
-      return -1;
-    }
-    int fp_data = nd.direct[0]; 
-    int sz_data = nd.size;
-    int num_blocks = sz_data / 4096 + 1;
-    fp_block = nd.direct[block]; 
-
-  }
-
-
-  if(fp_block != -1 && is_old_nd && is_old_mp) {
-    is_old_block = 1;
-    offset = fp_block;
-  }
-
-
-  step = 4096; 
-  p_cr->tfinal += step;
-  lseek(fd, offset, SEEK_SET);
-  write(fd, wr_buffer, 4096);
-
-
-  inode_t nd_new;
-  if(is_old_nd) {
-    nd_new.size = (block +1) * 4096;
-
-    nd_new.type = nd.type;
-    for (i = 0; i < 14; i++) nd_new.direct[i] = nd.direct[i]; 
-    nd_new.direct[block] = offset;			 
-  }
-  else {
-    nd_new.size = 0;
-    nd_new.type = MFS_REGULAR_FILE;		  
-    for (i = 0; i < 14; i++) nd_new.direct[i] = -1; 
-    nd_new.direct[block] = offset;	
-  }
-
-
-
-  offset = p_cr->tfinal;
-  step = sizeof(inode_t);
-  p_cr->tfinal += step;
-  lseek(fd, offset, SEEK_SET);
-  write(fd, &nd_new, step);
-
-
-  N_Trace mp_new;
-  if(is_old_mp) {
-    for(i = 0; i< 16; i++) mp_new.inodes[i] = mp.inodes[i] ; 
-    mp_new.inodes[l] = offset; 	
-  }
-  else {
-    for(i = 0; i< 16; i++) mp_new.inodes[i] = -1 ; 
-    mp_new.inodes[l] = offset;
-  }
-
-  offset = p_cr->tfinal;
-  step = sizeof(N_Trace);
-  p_cr->tfinal += step;
-  lseek(fd, offset, SEEK_SET);
-  write(fd, &mp_new, step);
-
-  p_cr->node_array[k] = offset; 
-  lseek(fd, 0, SEEK_SET);
-  write(fd, p_cr, sizeof(track_t));
-
-  fsync(fd);
-  return 0;
-
-}
-
-int read_from(int inum, char* buffer, int block){
-// interable vars
-  int i=0;
-  int j=0;
-  int k=0;
-  int l=0;
-
-  if(inum < 0 || inum >= 4096){
-      perror("read_from: invalid inum_1");
-      return -1;
-    }
-
-  k = inum / 16; 
-
-  int fp_mp =  p_cr->node_array[k];
-
-  l = inum % 16; 
-  N_Trace mp;
-  lseek(fd, fp_mp, SEEK_SET);
-  read(fd, &mp, sizeof(N_Trace));
-  int fp_nd = mp.inodes[l]; 
-  if(fp_nd == -1) {
-    perror("read_from: invalid inum_3");
-    return -1;
-  }
-
-  inode_t nd;
-  lseek(fd, fp_nd, SEEK_SET);
-  read(fd, &nd, sizeof(inode_t));
-
-  int fp_data = nd.direct[0];  
-  int sz_data = nd.size;
-  int num_blocks = sz_data / 4096 + 1;
-
-  if( block < 0 || block > 14) {
-    perror("read_from: invalid block_5");
-    return -1;
-  }
-
-  char* ip = NULL;
-
-  int fp_block = nd.direct[block]; 
-  lseek(fd, fp_block, SEEK_SET);
-  read(fd, buffer, 4096); 
-
-
-  return 0;
-}
-
 /*
 newDataBlock function: returns block address.
     - Find a free data block from data bitmap
@@ -495,49 +276,6 @@ addDataBlock function: takes inum
     - Append data block address to inode.direct
     - Write inode to inum (setInode)
 */
-int add_data_block(int pinum, int block) {
-  int i=0;
-  int j=0;
-  int k=0;
-  int l=0;
-
-  k = pinum / 16;
-
-  int fp_mp =  p_cr->node_array[k];
-
-  l = pinum % 16; 
-  N_Trace mp;
-  lseek(fd, fp_mp, SEEK_SET);
-  read(fd, &mp, sizeof(N_Trace));
-  int fp_nd = mp.inodes[l]; 
-
-  inode_t nd;
-  lseek(fd, fp_nd, SEEK_SET);
-  read(fd, &nd, sizeof(inode_t));
-  int fp_data = nd.direct[0]; 
-  int sz_data = nd.size;
-  int num_blocks = sz_data / 4096 + 1;
-
-  char data_buf[4096]; 
-  int fp_block = nd.direct[block];	
-
-  lseek(fd, fp_block, SEEK_SET);
-  read(fd, data_buf, 4096);
-
-  if(nd.type == MFS_DIRECTORY) {
-
-    Block_t* dir_buf = (Block_t*)data_buf;
-    for(j=0; j<64; j++) {
-      if(dir_buf->data_blocks[j].inum == -1){
-        continue;
-      } 
-      MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
-    }
-  }
-
-  return 0;
-
-}
 
 
 /*
@@ -832,254 +570,10 @@ int new_file(int pinum, int type, char* name) {
   return 0;
 }
 
-int remove_serv(int pinum, char* name){
-// interable variables to be used later
-  int i=0;
-  int j=0;
-  int k=0;
-  int l=0;
-
-  int offset = 0, step =0;
-  int is_nd_dir = 0, is_block_empty = 0, is_mp_new_empty = 0;
-
-  int fp_mp_par = -1, fp_nd_par = -1, fp_block_par = -1;
-
-  int fp_mp = -1, fp_nd = -1, fp_block = -1;
-
-  inode_t nd;
-  N_Trace mp;
-
- if(pinum < 0 || pinum >= 16) {
-    perror("unlink failure");
-    return -1;
-  }
- 
-  int inum = (lookup_file(pinum, name))->inum;
-  if(inum == -1) {
-    return 0;
-  }
-
-  k = inum / 16;
-
-  fp_mp =  p_cr->node_array[k];
-
-  l = inum % 16; 
-
-  if(p_cr->node_array[k] == -1){
-    perror("unlink failure");
-    return -1;
-  }
-
-  lseek(fd, fp_mp, SEEK_SET);
-  read(fd, &mp, sizeof(N_Trace));
-  fp_nd = mp.inodes[l]; 
-
-  if(p_cr->node_array[k] == -1){
-    perror("unlink failure");
-    return -1;
-  }
-
-  lseek(fd, fp_nd, SEEK_SET);
-  read(fd, &nd, sizeof(inode_t));
-
-  if(nd.type == MFS_DIRECTORY) {
-    is_nd_dir = 1;
-    char data_buf[4096]; 
-
-    for(i=0; i< 14; i++) {
-      fp_block = nd.direct[i];	
-      if(fp_block == -1) continue;
-
-      lseek(fd, fp_block, SEEK_SET);
-      read(fd, data_buf, 4096);
-	  
-      Block_t* dir_buf = (Block_t*)data_buf;
-      for(j=0; j<64; j++) {
-	MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
-
-      }
-    }
-  } 
-
-  N_Trace mp_new;
-  for(i = 0; i< 16; i++) mp_new.inodes[i] = mp.inodes[i]; 
-  mp_new.inodes[l] = -1;	
-
-  is_mp_new_empty = 1;
-  for(i = 0; i< 16; i++) {
-    if(mp_new.inodes[i] != -1){
-      is_mp_new_empty = 0;
-      break;
-    }
-  }
-
-  if(is_mp_new_empty) {
-
-    p_cr->node_array[k] = -1;		
-    lseek(fd, 0, SEEK_SET);
-    write(fd, p_cr, sizeof(track_t));
-
-    fsync(fd);
-  }
-  else {
-    offset = p_cr->tfinal;
-    step = sizeof(N_Trace); 
-    p_cr->tfinal += step;
-    lseek(fd, offset, SEEK_SET);
-    write(fd, &mp_new, step);	
-
-    p_cr->node_array[k] = offset;
-    lseek(fd, 0, SEEK_SET);
-    write(fd, p_cr, sizeof(track_t));
-
-    fsync(fd);
-  }
-
-  k = pinum / 16; 
-  fp_mp_par =  p_cr->node_array[k];
-
-  l = pinum % 16; 
-  N_Trace mp_par;	       
-  lseek(fd, fp_mp_par, SEEK_SET);
-  read(fd, &mp_par, sizeof(N_Trace));
-  fp_nd_par = mp_par.inodes[l]; 
-
-  inode_t nd_par;
-  lseek(fd, fp_nd_par, SEEK_SET);
-  read(fd, &nd_par, sizeof(inode_t));
-
-  char data_buf[4096]; 
-  Block_t* dir_buf = NULL;
-  int flag_found_entry = 0;
-  int block_par = 0;
-  for(i=0; i< 14; i++) {
-
-    fp_block_par = nd_par.direct[i];	
-    if(fp_block_par == -1) continue; 
-    block_par = i;
-    lseek(fd, fp_block_par, SEEK_SET);
-    read(fd, data_buf, 4096);
-	  
-    dir_buf = (Block_t*)data_buf;
-    for(j=0; j<64; j++) {
-      MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
-      if(p_de->inum == inum) {
-	p_de->inum = -1;
-      	strcpy(p_de->name, "\0"); 
-      	flag_found_entry = 1;
-      	break;
-      }
-
-    }
-
-    if(flag_found_entry)
-      break;
-  }
-
-  if(!flag_found_entry) {
-    return 0;		
-  }
-
-  offset = p_cr->tfinal;
-  step = 4096; 
-  p_cr->tfinal += step;
-  lseek(fd, offset, SEEK_SET);
-  write(fd, dir_buf, sizeof(Block_t)); 
-
-
-
-  inode_t nd_par_new;
-  nd_par_new.size = nd_par.size - 4096 > 0? nd_par.size - 4096 : 0 ;
-
-  nd_par_new.type = MFS_DIRECTORY;
-  for (i = 0; i < 14; i++) nd_par_new.direct[i] = nd_par.direct[i];
-  nd_par_new.direct[block_par] = offset; 	
-
-
-  offset = p_cr->tfinal;
-  step = sizeof(inode_t);
-  p_cr->tfinal += step;
-  lseek(fd, offset, SEEK_SET);
-  write(fd, &nd_par_new, step);	
-
-
-  N_Trace mp_par_new;
-  for(i = 0; i< 16; i++) mp_par_new.inodes[i] = mp_par.inodes[i];
-  mp_par_new.inodes[l] = offset;
-
-  offset = p_cr->tfinal;
-  step = sizeof(N_Trace);
-  p_cr->tfinal += step;
-  lseek(fd, offset, SEEK_SET);
-  write(fd, &mp_par_new, step);	
-
-  p_cr->node_array[k] = offset;
-  lseek(fd, 0, SEEK_SET);
-  write(fd, p_cr, sizeof(track_t));
-
-  fsync(fd);
-
-  return 0;
-}
-
-// simple shutdown of server
 int end_serv() {
   fsync(fd);
   exit(0);
 }
-
-int print_dir(int pinum) {
-  int i=0, j=0, k=0, l=0;
-
-  k = pinum / 16; 
-
-  int fp_mp =  p_cr->node_array[k];
-
-  l = pinum % 16;
-  N_Trace mp;
-  lseek(fd, fp_mp, SEEK_SET);
-  read(fd, &mp, sizeof(N_Trace));
-  int fp_nd = mp.inodes[l]; 
-
-  inode_t nd;
-  lseek(fd, fp_nd, SEEK_SET);
-  read(fd, &nd, sizeof(inode_t));
-
-  int fp_data = nd.direct[0]; 
-  int fp_block = -1;
-  int sz_data = nd.size;
-  int num_blocks = sz_data / 4096 + 1;
-
-  char data_buf[4096]; 
-  Block_t* dir_buf = NULL;
-
-  for(i=0; i< 14; i++) {
-
-    fp_block = nd.direct[i];	
-    if(fp_block == -1){
-      continue;
-    }
-
-    lseek(fd, fp_block, SEEK_SET);
-    read(fd, data_buf, 4096);
-	  
-    dir_buf = (Block_t*)data_buf;
-
-    for(j=0; j<64; j++) {
-      MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
-      if(p_de->inum == -1) continue;
-
-      printf("\n%s \t %d", &p_de->name[0], p_de->inum );
-    }
-
-  }
-
-  return 0;
-
-}
-
-
-
 
 int initialize_serv(char* image_path) {
   fd = open(image_path, O_RDWR | O_CREAT, S_IRWXU);
@@ -1174,7 +668,7 @@ int initialize_serv(char* image_path) {
   return 0;
 }
 
-int run_udp(int port) {
+int run_udp(int port) { 
   int sd=-1;
   if((sd =   UDP_Open(port))< 0){
     perror("initialize_serv: port open fail");
@@ -1221,14 +715,13 @@ int run_udp(int port) {
 
     }
     else if(buf_pk.msg == MFS_WRITE){
-      rx_pk.node_num = write_to(buf_pk.node_num, buf_pk.buf, buf_pk.offset);
+      rx_pk.node_num = write_file(buf_pk.node_num, buf_pk.buf, buf_pk.offset, buf_pk.nbytes);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 
     }
     else if(buf_pk.msg == MFS_READ){
-      
-      rx_pk.node_num = read_from(buf_pk.node_num, rx_pk.buf, buf_pk.offset);
+      rx_pk.node_num = read_file(buf_pk.node_num, rx_pk.buf, buf_pk.offset, buf_pk.nbytes);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 
@@ -1247,9 +740,9 @@ int run_udp(int port) {
     }
     else if(buf_pk.msg == MFS_SHUTDOWN) {
      /*
-            - Write any remaining data to image
-            - Break from loop
-            */
+      - Write any remaining data to image
+      - Break from loop
+      */
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
       end_serv();
