@@ -17,11 +17,14 @@
 int fd = -1;
 track_t* p_cr = NULL;
 super_t super;
+int highest_inode = 0;
+int hghst_alloc_dblk = 0;
 
 // set up the needed functions
+inode_t* read_inode(int);
 int initialize_serv(char* );
 int run_udp(int);
-int get_inode(int, char* );
+int lookup_file(int, char* );
 int set_inode(int , MFS_Stat_t* );
 int write_to(int , char* , int );
 int read_from(int , char* , int );
@@ -31,52 +34,68 @@ int end_serv();
 int add_data_block(int, int);
 int print_dir(int);
 
-void inode_dbg(inode_t* ind) {
-  debug("type: %d ", ind->type);
-  debug("size: %d ", ind->size);
+int fsread(int addr, void *ptr, size_t nbytes) {
+  lseek(fd, addr, SEEK_SET);
+  return read(fd, ptr, nbytes);
+}
+
+int fswrite(int addr, void *ptr, size_t nbytes) {
+  lseek(fd, addr, SEEK_SET);
+  return write(addr, ptr, nbytes);
+}
+
+void inode_dbg(int inum) {
+  inode_t ind = *(read_inode(inum));
+  debug("type: %d ", ind.type);
+  debug("size: %d ", ind.size);
   debug("direct: ");
   for(int i = 0; i < DIRECT_PTRS; i++) {
-    debug("%d ", ind->direct[i]);
+    debug("%d ", ind.direct[i]);
   }
   debug("\n");
 }
 
-/*
-readInode function: takes inum, returns inode_t.
-    - inode_addr = super.inode_reg_addr * block_size + inode-num * sizeof(inode)
-    - FsImg.read(inode_addr, sizeof(inode))
-*/
+void dir_dbg(int inum) {
+  debug("dir entries: ");
+  inode_t * ind = read_inode(inum);
+  for(int i = 0; i < (ind->size / sizeof(dir_ent_t)); i++) {
+    dir_ent_t de;
+    fsread(ind->direct[0] * UFS_BLOCK_SIZE + i * sizeof(dir_ent_t), 
+      &de, sizeof(dir_ent_t)); 
+    debug("%s %d, ", de.name, de.inum);
+  }
+  debug("\n");
+}
+
 inode_t* read_inode(int inum) {
-  int addr = super.inode_region_addr * UFS_BLOCK_SIZE + inum * sizeof(inode_t);
-  lseek(fd, addr, SEEK_SET);
   inode_t *ind = (inode_t *) malloc(sizeof(inode_t));
-  read(fd, ind, sizeof(inode_t));
+  fsread(super.inode_region_addr * UFS_BLOCK_SIZE + inum * sizeof(inode_t), 
+    ind, sizeof(inode_t));
   return ind;
 }
 
+void write_inode(int inum, inode_t inode) {
+  fswrite(super.inode_region_addr * UFS_BLOCK_SIZE + inum * sizeof(inode_t),
+    &inode, sizeof(inode_t));
+}
+
 /*
-get_inode(lookupFile) function: Find a file in a parent directory
+lookup_file( function: Find a file in a parent directory
 params: parent-inum, file-name, 
 returns: file inode number if found, -1 if not found
-  - Get inode from parent inum (getInode).
-  - Get data block addresses from inode.direct. 
-  - Loop through all direct addresses.
-      - Start from a data block addr and read data until 
-          file found or block end reached.
-          - Read sizeof(dir_ent_t) bytes and cast to dir_ent_t struct
-          - If name matches file name from client, break
-  - Return entry address of found file or err if file not found
+
+Iterates over directory entries in data block of parent to find a file. 
 */
-int get_inode(int pinum, char* name){
+int lookup_file(int pinum, char* name){
   inode_t nd = *(read_inode(pinum));
   
   /* assert dir */
   if(nd.type != MFS_DIRECTORY) {
-    perror("get_inode: invalid pinum_4");
+    perror("lookup_file: invalid pinum_4");
     return -1;
   }
   
-  // Iterate over dir entries in data block of parent 
+  
   int fp_data = nd.direct[0];  
   int num_blocks =nd.size / UFS_BLOCK_SIZE + 1; // assuming last direct block not full
 
@@ -85,7 +104,7 @@ int get_inode(int pinum, char* name){
   for(int i = 0; i < num_blocks; i++) {
     int fp_block = nd.direct[i] * UFS_BLOCK_SIZE;	
     if(fp_block == -1) continue;
-    debug("In get_inode: reading direct block %d from addr %d\n", i, fp_block);
+    debug("In lookup_file: reading direct block %d from addr %d\n", i, fp_block);
     lseek(fd, fp_block, SEEK_SET);
     read(fd, data_buf, UFS_BLOCK_SIZE);
 	  
@@ -93,20 +112,16 @@ int get_inode(int pinum, char* name){
     for(int j = 0; j<DIR_ENTRIES_IN_BLOCK; j++) {
       MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
       if(strncmp(p_de->name,name,60) == 0) {
-	      debug("In get_inode: found file. inum %d\n", p_de->inum);
+	      debug("In lookup_file: found file. inum %d\n", p_de->inum);
         return p_de->inum;
       }
     }
   }
-  debug("In get_inode: file not found. returning -1\n");
+  debug("In lookup_file: file not found. returning -1\n");
   return -1;
 }
 
-/*
-setInode function: takes inode_t, inum
-    - inode_addr = super.inode_reg_addr * block_size + inode-num * sizeof(inode)
-    - FsImg.write(inode_addr, inode_t, sizeof(inode))
-*/
+
 int set_inode(int inum, MFS_Stat_t* m){
 
   int i=0, j=0, k=0, l=0;
@@ -391,20 +406,60 @@ newInode function: takes type, returns inum
     - Write inode(type, size 0, direct=[block address])
     - Return inum
 */
+
 /*
-- Get parent inum, new-file type, new-file name
-- If name >= 28 bytes, throw err
-- Get parent-inode from parent inum (getInode)
+creat_file: 
+params: parent inum, new-file type, new-file name
+return new inode_num on success
 - Get last-block addr from parent-inode.direct addresses
 - If last-block.free space < sizeof(dir_ent_t)
     - add new data block to parent inum (addDataBlock)
     - update last-block address in parent-inode (setInode)
-- Create new inode with type and get new-inum (newInode)
-- Create a dir_ent_t with name and new-inum
 - FsImg.write(last-block addr + parent.size % block_size, dir_ent_t, sizeof(dir_ent_t))
-- Update size of parent-inode (setInode)
-- Return success
+
 */
+int creat_file(int pinum, int type, char *name) {
+  /* set in i-bitmap*/
+  highest_inode += 1;
+  unsigned int bits;
+  fsread(super.inode_bitmap_addr * UFS_BLOCK_SIZE, 
+    &bits, sizeof(unsigned int)); /* assume <= 32 inodes */
+  bits |= (0x1 << (sizeof(unsigned int) * 8 - highest_inode - 1));
+  fswrite(super.inode_bitmap_addr * UFS_BLOCK_SIZE, &bits, sizeof(unsigned int));
+
+  /* set in d-bitmap */
+  hghst_alloc_dblk += 1;
+  fsread(super.data_bitmap_addr * UFS_BLOCK_SIZE, 
+    &bits, sizeof(unsigned int)); /* assume <= 32 alloc blocks*/
+  bits |= (0x1 << (sizeof(unsigned int) * 8 - hghst_alloc_dblk - 1));
+  fswrite(super.data_bitmap_addr * UFS_BLOCK_SIZE, &bits, sizeof(unsigned int));
+
+  /* write in inode table */
+  inode_t newnd;
+  newnd.type = type;
+  newnd.size = 0;
+  for (int i = 0; i < DIRECT_PTRS; i++) {
+    newnd.direct[i] = -1;
+  }
+  newnd.direct[0] = hghst_alloc_dblk;
+  fswrite(super.inode_region_addr * UFS_BLOCK_SIZE + highest_inode * sizeof(inode_t), 
+          &newnd, sizeof(inode_t));
+
+  /* write in parent data*/
+  inode_t * pind = read_inode(pinum);
+  dir_ent_t de;
+  de.inum = highest_inode;
+  strcpy(de.name, name);
+  fswrite(pind->direct[0] * UFS_BLOCK_SIZE + pind->size, 
+    &de, sizeof(dir_ent_t)); /* assume dir size <= 1 block*/
+  pind->size += sizeof(dir_ent_t);
+  write_inode(pinum, *pind);
+  fsync(fd);
+  inode_dbg(pinum);
+  dir_dbg(pinum);
+  return highest_inode; 
+}
+
 int new_file(int pinum, int type, char* name) {
 // interable vars
   int i=0;
@@ -420,13 +475,14 @@ int new_file(int pinum, int type, char* name) {
 
   int fp_mp = -1, fp_nd = -1, fp_block = -1;
 
+  // find parent inode
   inode_t nd;
   N_Trace mp;
 
   int len_name = 0;
   for(i=0; name[i] != '\0'; i++, len_name ++)
     ;
-  if(get_inode(pinum, name) != -1) {
+  if(lookup_file(pinum, name) != -1) {
     return 0;
   }
 
@@ -707,7 +763,7 @@ int remove_serv(int pinum, char* name){
     return -1;
   }
  
-  int inum = get_inode(pinum, name);
+  int inum = lookup_file(pinum, name);
   if(inum == -1) {
     return 0;
   }
@@ -949,7 +1005,7 @@ int initialize_serv(char* image_path) {
   debug("Read super block. Inode rgn addr: %d, #inodes: %d\n", 
     super.inode_region_addr, super.num_inodes);
   debug("inode 0:\n");
-  inode_dbg(read_inode(0));
+  inode_dbg(0);
   p_cr = (track_t *)malloc(sizeof(track_t));
   int sz = 0;
   int offset = 0, step = 0;
@@ -1051,7 +1107,7 @@ int run_udp(int port) {
             - Return inum
         - Else throw err
         */
-      rx_pk.node_num = get_inode(buf_pk.node_num, buf_pk.name);
+      rx_pk.node_num = lookup_file(buf_pk.node_num, buf_pk.name);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 
@@ -1109,7 +1165,7 @@ int run_udp(int port) {
 
     }
     else if(buf_pk.msg == MFS_CREAT){
-      rx_pk.node_num = new_file(buf_pk.node_num, buf_pk.mtype, buf_pk.name);
+      rx_pk.node_num = creat_file(buf_pk.node_num, buf_pk.mtype, buf_pk.name);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 
