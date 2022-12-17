@@ -21,10 +21,13 @@ int highest_inode = 0;
 int hghst_alloc_dblk = 0;
 
 // set up the needed functions
-inode_t* read_inode(int);
+inode_t read_inode(int);
+int lookup_file(int, char* );
+int alloc_dblk(void);
+
 int initialize_serv(char* );
 int run_udp(int);
-int lookup_file(int, char* );
+
 int set_inode(int , MFS_Stat_t* );
 int write_to(int , char* , int );
 int read_from(int , char* , int );
@@ -45,7 +48,7 @@ int fswrite(int addr, void *ptr, size_t nbytes) {
 }
 
 void inode_dbg(int inum) {
-  inode_t ind = *(read_inode(inum));
+  inode_t ind = read_inode(inum);
   debug("type: %d ", ind.type);
   debug("size: %d ", ind.size);
   debug("direct: ");
@@ -57,21 +60,21 @@ void inode_dbg(int inum) {
 
 void dir_dbg(int inum) {
   debug("dir entries: ");
-  inode_t * ind = read_inode(inum);
-  for(int i = 0; i < (ind->size / sizeof(dir_ent_t)); i++) {
+  inode_t ind = read_inode(inum);
+  for(int i = 0; i < (ind.size / sizeof(dir_ent_t)); i++) {
     dir_ent_t de;
-    fsread(ind->direct[0] * UFS_BLOCK_SIZE + i * sizeof(dir_ent_t), 
+    fsread(ind.direct[0] * UFS_BLOCK_SIZE + i * sizeof(dir_ent_t), 
       &de, sizeof(dir_ent_t)); 
     debug("%s %d, ", de.name, de.inum);
   }
   debug("\n");
 }
 
-inode_t* read_inode(int inum) {
+inode_t read_inode(int inum) {
   inode_t *ind = (inode_t *) malloc(sizeof(inode_t));
   fsread(super.inode_region_addr * UFS_BLOCK_SIZE + inum * sizeof(inode_t), 
     ind, sizeof(inode_t));
-  return ind;
+  return *ind;
 }
 
 void write_inode(int inum, inode_t inode) {
@@ -87,7 +90,7 @@ returns: file inode number if found, -1 if not found
 Iterates over directory entries in data block of parent to find a file. 
 */
 int lookup_file(int pinum, char* name){
-  inode_t nd = *(read_inode(pinum));
+  inode_t nd = read_inode(pinum);
   
   /* assert dir */
   if(nd.type != MFS_DIRECTORY) {
@@ -121,6 +124,114 @@ int lookup_file(int pinum, char* name){
   return -1;
 }
 
+/*
+creat_file: 
+params: parent inum, new-file type, new-file name
+return new inode_num on success
+- Get last-block addr from parent-inode.direct addresses
+- If last-block.free space < sizeof(dir_ent_t)
+    - add new data block to parent inum (addDataBlock)
+    - update last-block address in parent-inode (setInode)
+- FsImg.write(last-block addr + parent.size % block_size, dir_ent_t, sizeof(dir_ent_t))
+
+*/
+int creat_file(int pinum, int type, char *name) {
+  /* set in i-bitmap*/
+  highest_inode += 1;
+  unsigned int bits;
+  fsread(super.inode_bitmap_addr * UFS_BLOCK_SIZE, 
+    &bits, sizeof(unsigned int)); /* assume <= 32 inodes */
+  bits |= (0x1 << (sizeof(unsigned int) * 8 - highest_inode - 1));
+  fswrite(super.inode_bitmap_addr * UFS_BLOCK_SIZE, &bits, sizeof(unsigned int));
+
+  /* write in inode table */
+  inode_t newnd;
+  newnd.type = type;
+  newnd.size = 0;
+  for (int i = 0; i < DIRECT_PTRS; i++) {
+    newnd.direct[i] = -1;
+  }
+  newnd.direct[0] = alloc_dblk();
+  fswrite(super.inode_region_addr * UFS_BLOCK_SIZE + highest_inode * sizeof(inode_t), 
+          &newnd, sizeof(inode_t));
+
+  /* write in parent data*/
+  inode_t pind = read_inode(pinum);
+  dir_ent_t de;
+  de.inum = highest_inode;
+  strcpy(de.name, name);
+  fswrite(pind.direct[0] * UFS_BLOCK_SIZE + pind.size, 
+    &de, sizeof(dir_ent_t)); /* assume dir size <= 1 block*/
+  pind.size += sizeof(dir_ent_t);
+  write_inode(pinum, pind);
+  fsync(fd);
+  inode_dbg(pinum);
+  dir_dbg(pinum);
+  return highest_inode; 
+}
+
+/*
+write_file
+param: inode-num, offset, data, nbytes
+returns: nbytes written
+
+Writes to one block or two blocks. 
+Adds a data block if not enough space in current block.
+Updates inode size and direct fields.
+*/
+
+int write_file(int inum, char *buf, int offset, int nbytes) {
+  inode_t fnd = read_inode(inum);
+  unsigned int mxd = ceil(1.0 * fnd.size / UFS_BLOCK_SIZE);
+  unsigned int mxe = fnd.size % UFS_BLOCK_SIZE;
+  unsigned int mxfree = UFS_BLOCK_SIZE - mxe;
+  if(nbytes > mxfree) {
+    fnd.direct[mxd + 1] = alloc_dblk();
+    lseek(fd, fnd.direct[mxd] * UFS_BLOCK_SIZE + mxe, SEEK_SET);
+    write(fd, buf, mxfree);
+    lseek(fd, fnd.direct[mxd + 1] * UFS_BLOCK_SIZE, SEEK_SET);
+    write(fd, buf + sizeof(char) * mxfree, nbytes - mxfree);
+  } else {
+    lseek(fd, fnd.direct[mxd] * UFS_BLOCK_SIZE + offset, SEEK_SET);
+    write(fd, buf, nbytes);
+  }
+  fnd.size += nbytes;
+  write_inode(inum, fnd);
+  fsync(fd);
+  return nbytes;
+}
+
+
+
+int alloc_dblk() {
+  /* set in d-bitmap */
+  unsigned int bits;
+  hghst_alloc_dblk += 1;
+  fsread(super.data_bitmap_addr * UFS_BLOCK_SIZE, 
+    &bits, sizeof(unsigned int)); /* assume <= 32 alloc blocks */
+  bits |= (0x1 << (sizeof(unsigned int) * 8 - hghst_alloc_dblk - 1));
+  fswrite(super.data_bitmap_addr * UFS_BLOCK_SIZE, &bits, sizeof(unsigned int));
+  return super.data_region_addr + hghst_alloc_dblk;
+}
+
+/*
+read_file
+- Get inode-num, offset, nbytes
+- Get inode from inode-num (getInode)
+(Comment: nbytes <= 4096, thus read can be from one block or two blocks)
+- block_start = inode.direct[int(offset / block_size)]
+- block_end =  inode.direct[int((offset + nbytes) / block_size)]
+- if block_start == block_end:
+-      data = FsImg.read(block_start + offset % block_size, nbytes)
+- else:
+-      data1 = FsImg.read(block_start + offset % block_size, (block_size - offset))
+-      data2 = FsImg.read(block_end, (nbytes - block_size + offset))
+-      data = concatenate(data1, data2)
+- Return data
+*/
+int read_file() {
+  
+}
 
 int set_inode(int inum, MFS_Stat_t* m){
 
@@ -407,58 +518,7 @@ newInode function: takes type, returns inum
     - Return inum
 */
 
-/*
-creat_file: 
-params: parent inum, new-file type, new-file name
-return new inode_num on success
-- Get last-block addr from parent-inode.direct addresses
-- If last-block.free space < sizeof(dir_ent_t)
-    - add new data block to parent inum (addDataBlock)
-    - update last-block address in parent-inode (setInode)
-- FsImg.write(last-block addr + parent.size % block_size, dir_ent_t, sizeof(dir_ent_t))
 
-*/
-int creat_file(int pinum, int type, char *name) {
-  /* set in i-bitmap*/
-  highest_inode += 1;
-  unsigned int bits;
-  fsread(super.inode_bitmap_addr * UFS_BLOCK_SIZE, 
-    &bits, sizeof(unsigned int)); /* assume <= 32 inodes */
-  bits |= (0x1 << (sizeof(unsigned int) * 8 - highest_inode - 1));
-  fswrite(super.inode_bitmap_addr * UFS_BLOCK_SIZE, &bits, sizeof(unsigned int));
-
-  /* set in d-bitmap */
-  hghst_alloc_dblk += 1;
-  fsread(super.data_bitmap_addr * UFS_BLOCK_SIZE, 
-    &bits, sizeof(unsigned int)); /* assume <= 32 alloc blocks*/
-  bits |= (0x1 << (sizeof(unsigned int) * 8 - hghst_alloc_dblk - 1));
-  fswrite(super.data_bitmap_addr * UFS_BLOCK_SIZE, &bits, sizeof(unsigned int));
-
-  /* write in inode table */
-  inode_t newnd;
-  newnd.type = type;
-  newnd.size = 0;
-  for (int i = 0; i < DIRECT_PTRS; i++) {
-    newnd.direct[i] = -1;
-  }
-  newnd.direct[0] = hghst_alloc_dblk;
-  fswrite(super.inode_region_addr * UFS_BLOCK_SIZE + highest_inode * sizeof(inode_t), 
-          &newnd, sizeof(inode_t));
-
-  /* write in parent data*/
-  inode_t * pind = read_inode(pinum);
-  dir_ent_t de;
-  de.inum = highest_inode;
-  strcpy(de.name, name);
-  fswrite(pind->direct[0] * UFS_BLOCK_SIZE + pind->size, 
-    &de, sizeof(dir_ent_t)); /* assume dir size <= 1 block*/
-  pind->size += sizeof(dir_ent_t);
-  write_inode(pinum, *pind);
-  fsync(fd);
-  inode_dbg(pinum);
-  dir_dbg(pinum);
-  return highest_inode; 
-}
 
 int new_file(int pinum, int type, char* name) {
 // interable vars
@@ -1124,41 +1184,13 @@ int run_udp(int port) {
 
     }
     else if(buf_pk.msg == MFS_WRITE){
-      /*
-            - Get inode-num, offset, data, nbytes
-            - inode = getInode(inode-num)
-            - Get last_block from inode.direct
-            (Comment: nbytes <= 4096, thus write can be from one block or two blocks)
-            - if last_block.free_space >= nbytes:
-                - FsImg.write(data)
-            - else:
-                - Add a data block (addDataBlock)
-                - Get inode from inum (getInode)
-                - Write possible data in second-to-last-block in inode.direct
-                - Write remaining data in last block in inode.direct
-            - Update file size for inum (setInode)
-            - Return success
-            */
       rx_pk.node_num = write_to(buf_pk.node_num, buf_pk.buf, buf_pk.offset);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 
     }
     else if(buf_pk.msg == MFS_READ){
-      /*
-            - Get inode-num, offset, nbytes
-            - Get inode from inode-num (getInode)
-            (Comment: nbytes <= 4096, thus read can be from one block or two blocks)
-            - block_start = inode.direct[int(offset / block_size)]
-            - block_end =  inode.direct[int((offset + nbytes) / block_size)]
-            - if block_start == block_end:
-            -      data = FsImg.read(block_start + offset % block_size, nbytes)
-            - else:
-            -      data1 = FsImg.read(block_start + offset % block_size, (block_size - offset))
-            -      data2 = FsImg.read(block_end, (nbytes - block_size + offset))
-            -      data = concatenate(data1, data2)
-            - Return data
-            */
+      
       rx_pk.node_num = read_from(buf_pk.node_num, rx_pk.buf, buf_pk.offset);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
