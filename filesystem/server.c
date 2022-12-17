@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -98,25 +99,25 @@ dir_ent_t* lookup_file(int pinum, char* name){
     return NULL;
   }
     
-  int num_blocks =nd.size / UFS_BLOCK_SIZE + 1; // assuming last direct block not full
+  unsigned int mxb = ceil(1.0 * nd.size / UFS_BLOCK_SIZE); 
 
-  char data_buf[UFS_BLOCK_SIZE]; 
+  for (int i = 0; i < mxb; i++) {
+    unsigned int ndes = (i == (mxb - 1)) && (nd.size % UFS_BLOCK_SIZE != 0)? 
+      (nd.size % UFS_BLOCK_SIZE) / sizeof(dir_ent_t) :
+      UFS_BLOCK_SIZE / (sizeof(dir_ent_t));
+    
+    debug("In lookup_file: reading direct block %d from blk addr %d\n", i, nd.direct[i]);
 
-  for(int i = 0; i < num_blocks; i++) {
-    int fp_block = nd.direct[i] * UFS_BLOCK_SIZE;	
-    if(fp_block == -1) continue;
-    debug("In lookup_file: reading direct block %d from addr %d\n", i, fp_block);
-    lseek(fd, fp_block, SEEK_SET);
-    read(fd, data_buf, UFS_BLOCK_SIZE);
-	  
-    Block_t* dir_buf = (Block_t*)data_buf;
-    for(int j = 0; j<DIR_ENTRIES_IN_BLOCK; j++) {
-      dir_ent_t* p_de = &dir_buf->data_blocks[j];
-      if(strncmp(p_de->name,name,60) == 0) {
-	      debug("In lookup_file: found file. inum %d\n", p_de->inum);
-        return p_de;
+    dir_ent_t * de;
+    for (int j = 0; j < ndes; j++) {
+      lseek(fd, nd.direct[i] * UFS_BLOCK_SIZE + j * sizeof(dir_ent_t), SEEK_SET);
+      read(fd, de, sizeof(dir_ent_t));
+      if(strcmp(de->name, name) == 0) {
+        debug("In lookup_file: file name matched. inum %d\n", de->inum);
+        return de;
       }
     }
+    
   }
   debug("In lookup_file: file not found. returning -1\n");
   return NULL;
@@ -221,7 +222,7 @@ Read from one block or two blocks as nbytes <= 4096.
 */
 int read_file(int inum, char* buf, int offset, int nbytes) {
   inode_t fnd = read_inode(inum);
-  unsigned int mxb = ceil(fnd.size / UFS_BLOCK_SIZE);
+  unsigned int mxb = ceil(1.0 * fnd.size / UFS_BLOCK_SIZE);
   unsigned int rdb = ceil(1.0 * offset / UFS_BLOCK_SIZE);
   unsigned int rds = offset % UFS_BLOCK_SIZE;
   unsigned int rdf = UFS_BLOCK_SIZE - rds;
@@ -240,7 +241,7 @@ int read_file(int inum, char* buf, int offset, int nbytes) {
 /*
 params: parent inum, file-name
 
-Remove a file or directory name from the parent dir.
+Remove a regular file or directory name from the parent dir.
 
 - Get parent-inode from parent inum (call getInode)
 - Lookup file and get entry address of file (call lookupFile)
@@ -250,7 +251,7 @@ Remove a file or directory name from the parent dir.
 - Mark sizeof(dir_ent_t) bytes as invalid at entry address.
 - Return success
 */
-int unlink(int pinum, char *name) {
+int unlink_file(int pinum, char *name) {
   dir_ent_t *de = lookup_file(pinum, name);
   if (de != NULL && de->inum != -1) {
     inode_t ind = read_inode(de->inum);
@@ -572,7 +573,7 @@ int new_file(int pinum, int type, char* name) {
   int len_name = 0;
   for(i=0; name[i] != '\0'; i++, len_name ++)
     ;
-  if(lookup_file(pinum, name) != -1) {
+  if(lookup_file(pinum, name) != NULL) {
     return 0;
   }
 
@@ -853,7 +854,7 @@ int remove_serv(int pinum, char* name){
     return -1;
   }
  
-  int inum = lookup_file(pinum, name);
+  int inum = (lookup_file(pinum, name))->inum;
   if(inum == -1) {
     return 0;
   }
@@ -1239,7 +1240,7 @@ int run_udp(int port) {
 
     }
     else if(buf_pk.msg == MFS_UNLINK){
-      rx_pk.node_num = unlink(buf_pk.node_num, buf_pk.name);
+      rx_pk.node_num = unlink_file(buf_pk.node_num, buf_pk.name);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 

@@ -7,16 +7,20 @@ OBJS   := ${SRCS:c=o}
 PROGS  := ${SRCS:.c=}
 
 .PHONY: all
-all: ${PROGS}
+all: ${PROGS} server client-app libmfs.so
 
 ${PROGS} : % : %.o Makefile
 	${CC} $< -o $@ udp.c
 
 clean:
 	rm -f ${PROGS} ${OBJS}
+	rm server 
+	rm client-app 
+	rm libmfs.so
+	rm fs
 
 server: server.c udp.c message.h mfs.h Makefile
-	$(CC) $(CFLAGS) server.c -o server udp.c
+	$(CC) $(CFLAGS) server.c -o server udp.c -lm
 
 client-app: client-app.c mfs.c udp.c 
 	$(CC) $(CFLAGS) client-app.c udp.c -o client-app
