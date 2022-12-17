@@ -22,7 +22,7 @@ int hghst_alloc_dblk = 0;
 
 // set up the needed functions
 inode_t read_inode(int);
-int lookup_file(int, char* );
+dir_ent_t* lookup_file(int, char*);
 int alloc_dblk(void);
 
 int initialize_serv(char* );
@@ -83,23 +83,21 @@ void write_inode(int inum, inode_t inode) {
 }
 
 /*
-lookup_file( function: Find a file in a parent directory
+lookup_file: Find a file in a parent directory
 params: parent-inum, file-name, 
 returns: file inode number if found, -1 if not found
 
 Iterates over directory entries in data block of parent to find a file. 
 */
-int lookup_file(int pinum, char* name){
+dir_ent_t* lookup_file(int pinum, char* name){
   inode_t nd = read_inode(pinum);
   
   /* assert dir */
   if(nd.type != MFS_DIRECTORY) {
     perror("lookup_file: invalid pinum_4");
-    return -1;
+    return NULL;
   }
-  
-  
-  int fp_data = nd.direct[0];  
+    
   int num_blocks =nd.size / UFS_BLOCK_SIZE + 1; // assuming last direct block not full
 
   char data_buf[UFS_BLOCK_SIZE]; 
@@ -113,15 +111,15 @@ int lookup_file(int pinum, char* name){
 	  
     Block_t* dir_buf = (Block_t*)data_buf;
     for(int j = 0; j<DIR_ENTRIES_IN_BLOCK; j++) {
-      MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
+      dir_ent_t* p_de = &dir_buf->data_blocks[j];
       if(strncmp(p_de->name,name,60) == 0) {
 	      debug("In lookup_file: found file. inum %d\n", p_de->inum);
-        return p_de->inum;
+        return p_de;
       }
     }
   }
   debug("In lookup_file: file not found. returning -1\n");
-  return -1;
+  return NULL;
 }
 
 /*
@@ -237,6 +235,32 @@ int read_file(int inum, char* buf, int offset, int nbytes) {
     read(fd, buf + rdf, nbytes - rdf);
   }
   return nbytes;
+}
+
+/*
+params: parent inum, file-name
+
+Remove a file or directory name from the parent dir.
+
+- Get parent-inode from parent inum (call getInode)
+- Lookup file and get entry address of file (call lookupFile)
+- Cast entry to dir_ent_t and get inum.
+- Get inode from file-inum (call getInode)
+- If file type is dir and size > 0, throw err
+- Mark sizeof(dir_ent_t) bytes as invalid at entry address.
+- Return success
+*/
+int unlink(int pinum, char *name) {
+  dir_ent_t *de = lookup_file(pinum, name);
+  if (de != NULL && de->inum != -1) {
+    inode_t ind = read_inode(de->inum);
+    if (ind.type == UFS_DIRECTORY && ind.size > 0) {
+      return -1;
+    }
+    strcpy(de->name, "");
+    de->inum = -1; 
+  }
+  return 0;
 }
 
 int set_inode(int inum, MFS_Stat_t* m){
@@ -1173,18 +1197,24 @@ int run_udp(int port) {
             - Return inum
         - Else throw err
         */
-      rx_pk.node_num = lookup_file(buf_pk.node_num, buf_pk.name);
+      dir_ent_t *de = lookup_file(buf_pk.node_num, buf_pk.name);
+      if (de != NULL && de->inum != -1) {
+        rx_pk.node_num = de->inum;
+      } else {
+        rx_pk.node_num = -1;
+      }
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
-
     }
     else if(buf_pk.msg == MFS_STAT){
         /*
-            - Get inum from message
-            - Get inode from inum (call getInode)
-            - Return MFS-Stat struct with type and size of inode
-            */
-      rx_pk.node_num = set_inode(buf_pk.node_num, &(rx_pk.st));
+        - Get inum from message
+        - Get inode from inum (call getInode)
+        - Return MFS-Stat struct with type and size of inode
+        */
+      inode_t ind = read_inode(buf_pk.node_num);
+      rx_pk.st.size = ind.size;
+      rx_pk.st.type = ind.type;
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 
@@ -1209,17 +1239,7 @@ int run_udp(int port) {
 
     }
     else if(buf_pk.msg == MFS_UNLINK){
-      /*
-            - Get parent inum, file-name 
-            - Get parent-inode from parent inum (call getInode)
-            - Lookup file and get entry address of file (call lookupFile)
-            - Cast entry to dir_ent_t and get inum.
-            - Get inode from file-inum (call getInode)
-            - If file type is dir and size > 0, throw err
-            - Mark sizeof(dir_ent_t) bytes as invalid at entry address.
-            - Return success
-            */
-      rx_pk.node_num = (buf_pk.node_num, buf_pk.name);
+      rx_pk.node_num = unlink(buf_pk.node_num, buf_pk.name);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 
@@ -1229,7 +1249,7 @@ int run_udp(int port) {
             - Write any remaining data to image
             - Break from loop
             */
-     rx_pk.msg = MFS_FEEDBACK;
+      rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
       end_serv();
     }
