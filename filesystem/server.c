@@ -16,6 +16,7 @@
 
 int fd = -1;
 track_t* p_cr = NULL;
+super_t super;
 
 // set up the needed functions
 int initialize_serv(char* );
@@ -28,14 +29,30 @@ int new_file(int , int , char* );
 int remove_serv(int , char* );
 int end_serv();
 int add_data_block(int, int);
+int print_dir(int);
 
-
+void inode_dbg(inode_t* ind) {
+  debug("type: %d ", ind->type);
+  debug("size: %d ", ind->size);
+  debug("direct: ");
+  for(int i = 0; i < DIRECT_PTRS; i++) {
+    debug("%d ", ind->direct[i]);
+  }
+  debug("\n");
+}
 
 /*
-getInode function: takes inum, returns inode_t.
+readInode function: takes inum, returns inode_t.
     - inode_addr = super.inode_reg_addr * block_size + inode-num * sizeof(inode)
     - FsImg.read(inode_addr, sizeof(inode))
 */
+inode_t* read_inode(int inum) {
+  int addr = super.inode_region_addr * UFS_BLOCK_SIZE + inum * sizeof(inode_t);
+  lseek(fd, addr, SEEK_SET);
+  inode_t *ind = (inode_t *) malloc(sizeof(inode_t));
+  read(fd, ind, sizeof(inode_t));
+  return ind;
+}
 
 /*
 get_inode(lookupFile) function: Find a file in a parent directory
@@ -51,53 +68,29 @@ returns: file inode number if found, -1 if not found
   - Return entry address of found file or err if file not found
 */
 int get_inode(int pinum, char* name){
-  debug("In get_inode: pinum %d, name %s\n", pinum, name);
-  int i=0, j=0, k=0, l=0;
-
-  // Get parent inode
-  k = pinum / 16; 
-  if(p_cr->node_array[k] == -1){
-    perror("get_inode: invalid pinum_2");
-    debug("In get_inode: parent inode does not exist. returning -1.");
-    return -1;
-  }
-  int fp_mp =  p_cr->node_array[k];
-
-  l = pinum % 16; 
-  N_Trace mp;
-  lseek(fd, fp_mp, SEEK_SET);
-  read(fd, &mp, sizeof(N_Trace));
-  int fp_nd = mp.inodes[l]; 
-
-  inode_t nd;
-  lseek(fd, fp_nd, SEEK_SET);
-  read(fd, &nd, sizeof(inode_t));
-  debug("In get_inode: Found parent inode\n");
-
+  inode_t nd = *(read_inode(pinum));
+  
   /* assert dir */
   if(nd.type != MFS_DIRECTORY) {
     perror("get_inode: invalid pinum_4");
-    debug("In get_inode: parent inode is not directory. returning -1.");
     return -1;
   }
-
+  
   // Iterate over dir entries in data block of parent 
   int fp_data = nd.direct[0];  
-  int sz_data = nd.size;
-  int num_blocks = sz_data / 4096 + 1; // assuming last direct block not full
+  int num_blocks =nd.size / UFS_BLOCK_SIZE + 1; // assuming last direct block not full
 
-  char data_buf[4096]; 
+  char data_buf[UFS_BLOCK_SIZE]; 
 
-  for(i=0; i< 14; i++) {
-    debug("In get_inode: reading direct block %d\n", i);
-    int fp_block = nd.direct[i];	
+  for(int i = 0; i < num_blocks; i++) {
+    int fp_block = nd.direct[i] * UFS_BLOCK_SIZE;	
     if(fp_block == -1) continue;
-
+    debug("In get_inode: reading direct block %d from addr %d\n", i, fp_block);
     lseek(fd, fp_block, SEEK_SET);
     read(fd, data_buf, UFS_BLOCK_SIZE);
 	  
     Block_t* dir_buf = (Block_t*)data_buf;
-    for(j=0; j<DIR_ENTRIES_IN_BLOCK; j++) {
+    for(int j = 0; j<DIR_ENTRIES_IN_BLOCK; j++) {
       MFS_DirEnt_t* p_de = &dir_buf->data_blocks[j];
       if(strncmp(p_de->name,name,60) == 0) {
 	      debug("In get_inode: found file. inum %d\n", p_de->inum);
@@ -951,6 +944,12 @@ int initialize_serv(char* image_path) {
 
   int rc, i, j;
 
+  lseek(fd, 0, SEEK_SET);
+  read(fd, &super, sizeof(super_t));
+  debug("Read super block. Inode rgn addr: %d, #inodes: %d\n", 
+    super.inode_region_addr, super.num_inodes);
+  debug("inode 0:\n");
+  inode_dbg(read_inode(0));
   p_cr = (track_t *)malloc(sizeof(track_t));
   int sz = 0;
   int offset = 0, step = 0;
