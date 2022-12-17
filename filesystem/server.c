@@ -185,15 +185,15 @@ int write_file(int inum, char *buf, int offset, int nbytes) {
   unsigned int mxd = ceil(1.0 * fnd.size / UFS_BLOCK_SIZE);
   unsigned int mxe = fnd.size % UFS_BLOCK_SIZE;
   unsigned int mxfree = UFS_BLOCK_SIZE - mxe;
-  if(nbytes > mxfree) {
+  if(nbytes <= mxfree) {
+    lseek(fd, fnd.direct[mxd] * UFS_BLOCK_SIZE + offset, SEEK_SET);
+    write(fd, buf, nbytes);
+  } else {
     fnd.direct[mxd + 1] = alloc_dblk();
     lseek(fd, fnd.direct[mxd] * UFS_BLOCK_SIZE + mxe, SEEK_SET);
     write(fd, buf, mxfree);
     lseek(fd, fnd.direct[mxd + 1] * UFS_BLOCK_SIZE, SEEK_SET);
     write(fd, buf + sizeof(char) * mxfree, nbytes - mxfree);
-  } else {
-    lseek(fd, fnd.direct[mxd] * UFS_BLOCK_SIZE + offset, SEEK_SET);
-    write(fd, buf, nbytes);
   }
   fnd.size += nbytes;
   write_inode(inum, fnd);
@@ -216,21 +216,27 @@ int alloc_dblk() {
 
 /*
 read_file
-- Get inode-num, offset, nbytes
-- Get inode from inode-num (getInode)
-(Comment: nbytes <= 4096, thus read can be from one block or two blocks)
-- block_start = inode.direct[int(offset / block_size)]
-- block_end =  inode.direct[int((offset + nbytes) / block_size)]
-- if block_start == block_end:
--      data = FsImg.read(block_start + offset % block_size, nbytes)
-- else:
--      data1 = FsImg.read(block_start + offset % block_size, (block_size - offset))
--      data2 = FsImg.read(block_end, (nbytes - block_size + offset))
--      data = concatenate(data1, data2)
-- Return data
+param: inode-num, buf, offset, nbytes
+returns: nbytes read
+
+Read from one block or two blocks as nbytes <= 4096.
 */
-int read_file() {
-  
+int read_file(int inum, char* buf, int offset, int nbytes) {
+  inode_t fnd = read_inode(inum);
+  unsigned int mxb = ceil(fnd.size / UFS_BLOCK_SIZE);
+  unsigned int rdb = ceil(1.0 * offset / UFS_BLOCK_SIZE);
+  unsigned int rds = offset % UFS_BLOCK_SIZE;
+  unsigned int rdf = UFS_BLOCK_SIZE - rds;
+  if (nbytes <= rdf) {
+    lseek(fd, fnd.direct[rdb] * UFS_BLOCK_SIZE + rds, SEEK_SET);
+    read(fd, buf, nbytes);
+  } else {
+    lseek(fd, fnd.direct[rdb] * UFS_BLOCK_SIZE + rds, SEEK_SET);
+    read(fd, buf, rdf);
+    lseek(fd, fnd.direct[rdb + 1] * UFS_BLOCK_SIZE, SEEK_SET);
+    read(fd, buf + rdf, nbytes - rdf);
+  }
+  return nbytes;
 }
 
 int set_inode(int inum, MFS_Stat_t* m){
