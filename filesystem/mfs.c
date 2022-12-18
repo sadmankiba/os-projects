@@ -155,8 +155,8 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
 	if(Server_To_Client(&send, &receive, my_serv, prt) <= -1){
 		return -1;
 	}
-
-	// filil up the struct passed with the proper info
+	if (receive.node_num == -1) return -1;
+	
 	m->type = receive.st.type;
 	m->size = receive.st.size;
 
