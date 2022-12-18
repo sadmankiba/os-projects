@@ -136,22 +136,16 @@ int MFS_Lookup(int pinum, char *name){
 
 // MFS_Stat method, takes in stat structure and inum used to get stats of a message
 int MFS_Stat(int inum, MFS_Stat_t *m) {
-	// create the meessage to be sent
 	message_t send;
-
-	// set fields of the message struct
 	send.msg = MFS_STAT;
 	send.node_num = inum;
 	
-	// check to make sure the server is functioning
 	if(!working){
                 return -1;
 	}
 
-	// message to ve received
 	message_t receive;
 
-	// send between clent and server
 	if(Server_To_Client(&send, &receive, my_serv, prt) <= -1){
 		return -1;
 	}
@@ -234,15 +228,13 @@ int MFS_Creat(int pinum, int type, char *name){
 		return -1;
 	}
 
-	// check that name isn't too long
+	
 	if(strlen(name) > 28){
 		return -1;
 	}
 
-	// message to send
 	message_t send;
 
-	// use parameters to fill the message
 	send.mtype = type;
 	send.msg = MFS_CREAT;
 	send.node_num = pinum;

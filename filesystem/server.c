@@ -25,7 +25,10 @@ unsigned int hghst_alloc_dblk = 0;
 inode_t * read_inode(unsigned int);
 dir_ent_t* lookup_file(int, char*, unsigned int*);
 int write_file(int inum, void *buf, unsigned int offset, int nbytes, int type);
-unsigned int alloc_dblk(void);
+int alloc_dblk(void);
+int fsread(int addr, void *ptr, size_t nbytes);
+int fswrite(int addr, void *ptr, size_t nbytes);
+int new_inode(int);
 
 int initialize_serv(char* );
 int run_udp(int);
@@ -130,33 +133,14 @@ int creat_file(int pinum, int type, char *name) {
   dir_ent_t* lde = lookup_file(pinum, name, &addr);
   if (lde != NULL) return 0;
 
-  /* set in i-bitmap*/
-  highest_inode += 1;
-  unsigned int bits;
-  fsread(super.inode_bitmap_addr * UFS_BLOCK_SIZE 
-    + highest_inode % (8 * sizeof(unsigned int)), 
-    &bits, sizeof(unsigned int)); 
-  bits |= mask(highest_inode);
-  fswrite(super.inode_bitmap_addr * UFS_BLOCK_SIZE 
-    + highest_inode % (8 * sizeof(unsigned int)), 
-    &bits, sizeof(unsigned int));
-
-  /* write in inode table */
-  inode_t newnd;
-  newnd.type = type;
-  newnd.size = 0;
-  for (int i = 0; i < DIRECT_PTRS; i++) {
-    newnd.direct[i] = -1;
-  }
-
-  fswrite(super.inode_region_addr * UFS_BLOCK_SIZE + highest_inode * sizeof(inode_t), 
-          &newnd, sizeof(inode_t));
+  int ninum = new_inode(type);
+  if (ninum == -1) return -1;
 
   /* write in parent data*/
   inode_t *pind = read_inode(pinum);
   
   if (pind->direct[0] == -1) { /* if pdir not have any data block yet */
-    unsigned int ndb = alloc_dblk();
+    int ndb = alloc_dblk();
     if (ndb == -1) return -1;
     pind->direct[0] = ndb;
     write_inode(pinum, *pind);
@@ -171,7 +155,7 @@ int creat_file(int pinum, int type, char *name) {
   }
 
   dir_ent_t de;
-  de.inum = highest_inode;
+  de.inum = ninum;
   strcpy(de.name, name);
   write_file(pinum, &de, pind->size, sizeof(dir_ent_t), UFS_DIRECTORY);
   inode_dbg(pinum);
@@ -200,7 +184,7 @@ int write_file(int inum, void *buf, unsigned int offset, int nbytes, int type) {
   unsigned int offree = UFS_BLOCK_SIZE - ofr;
   unsigned int d = ofd;
   while(d >= 0 && fnd->direct[d] == -1) {
-    unsigned int ndb = alloc_dblk();
+    int ndb = alloc_dblk();
     if (ndb == -1) return -1;
     fnd->direct[d] = ndb;
     d--;
@@ -208,7 +192,7 @@ int write_file(int inum, void *buf, unsigned int offset, int nbytes, int type) {
   if(nbytes <= offree) {
     fswrite(fnd->direct[ofd] * UFS_BLOCK_SIZE + ofr, buf, nbytes);
   } else {
-    unsigned int ndb = alloc_dblk();
+    int ndb = alloc_dblk();
     if (ndb == -1) return -1;
     fnd->direct[ofd + 1] = ndb;
     fswrite(fnd->direct[ofd] * UFS_BLOCK_SIZE + ofr, buf, offree);
@@ -228,7 +212,7 @@ newDataBlock function: returns block address.
     - data block address = (super.data_region_addr + bit index in bitmap) * block_size
     
 */
-unsigned int alloc_dblk() {
+int alloc_dblk() {
   /* set in d-bitmap */
   if (hghst_alloc_dblk == (super.data_region_len - 1)) return -1;
 
@@ -299,13 +283,36 @@ int unlink_file(int pinum, char *name) {
 
 
 /*
-newInode function: takes type, returns inum
-    - Create a new data block and get address (newDataBlock)
-    - Get new inode-num (maybe current-max-inode + 1)
-    - Set bitmap for new-inode-num to 1
-    - Write inode(type, size 0, direct=[block address])
-    - Return inum
+newInode function: create a new inode
+params: type
+return: inum on success, -1 on failure
 */
+int new_inode(int type) {
+  /* set in i-bitmap*/
+  if (highest_inode == (super.num_inodes - 1)) return -1;
+
+  highest_inode += 1;
+  unsigned int bits;
+  fsread(super.inode_bitmap_addr * UFS_BLOCK_SIZE 
+    + highest_inode % (8 * sizeof(unsigned int)), 
+    &bits, sizeof(unsigned int)); 
+  bits |= mask(highest_inode);
+  fswrite(super.inode_bitmap_addr * UFS_BLOCK_SIZE 
+    + highest_inode % (8 * sizeof(unsigned int)), 
+    &bits, sizeof(unsigned int));
+
+  /* write in inode table */
+  inode_t newnd;
+  newnd.type = type;
+  newnd.size = 0;
+  for (int i = 0; i < DIRECT_PTRS; i++) {
+    newnd.direct[i] = -1;
+  }
+
+  fswrite(super.inode_region_addr * UFS_BLOCK_SIZE + highest_inode * sizeof(inode_t), 
+          &newnd, sizeof(inode_t));
+  return highest_inode;
+}
 
 int end_serv() {
   fsync(fd);
