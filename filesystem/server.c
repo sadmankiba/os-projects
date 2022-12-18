@@ -24,6 +24,7 @@ unsigned int hghst_alloc_dblk = 0;
 // set up the needed functions
 inode_t * read_inode(unsigned int);
 dir_ent_t* lookup_file(int, char*);
+int write_file(int inum, void *buf, unsigned int offset, int nbytes, int type);
 int alloc_dblk(void);
 
 int initialize_serv(char* );
@@ -96,8 +97,9 @@ Iterates over directory entries in data block of parent to find a file.
 dir_ent_t* lookup_file(int pinum, char* name){
   inode_t *nd = read_inode(pinum);
   
-  /* assert dir */
-  if(nd->type != MFS_DIRECTORY) {
+  if(nd == NULL) return NULL;
+
+  if(nd->type != UFS_DIRECTORY) {
     perror("lookup_file: invalid pinum_4");
     return NULL;
   }
@@ -114,8 +116,8 @@ dir_ent_t* lookup_file(int pinum, char* name){
     dir_ent_t * de = (dir_ent_t *) malloc(sizeof(dir_ent_t));
     for (int j = 0; j < ndes; j++) {
       fsread(nd->direct[i] * UFS_BLOCK_SIZE + j * sizeof(dir_ent_t), de, sizeof(dir_ent_t));
-      if(strcmp(de->name, name) == 0) {
-        debug("In lookup_file: file name matched. inum %d\n", de->inum);
+      if(strcmp(de->name, name) == 0 && de->inum != -1) {
+        debug("In lookup_file: file found. inum %d\n", de->inum);
         return de;
       }
     }
@@ -136,13 +138,20 @@ return new inode_num on success
 
 */
 int creat_file(int pinum, int type, char *name) {
+  /* Check if name already exists */
+  dir_ent_t* lde = lookup_file(pinum, name);
+  if (lde != NULL) return 0;
+
   /* set in i-bitmap*/
   highest_inode += 1;
   unsigned int bits;
-  fsread(super.inode_bitmap_addr * UFS_BLOCK_SIZE, 
-    &bits, sizeof(unsigned int)); /* assume <= 32 inodes */
+  fsread(super.inode_bitmap_addr * UFS_BLOCK_SIZE 
+    + highest_inode % (8 * sizeof(unsigned int)), 
+    &bits, sizeof(unsigned int)); 
   bits |= mask(highest_inode);
-  fswrite(super.inode_bitmap_addr * UFS_BLOCK_SIZE, &bits, sizeof(unsigned int));
+  fswrite(super.inode_bitmap_addr * UFS_BLOCK_SIZE 
+    + highest_inode % (8 * sizeof(unsigned int)), 
+    &bits, sizeof(unsigned int));
 
   /* write in inode table */
   inode_t newnd;
@@ -151,7 +160,7 @@ int creat_file(int pinum, int type, char *name) {
   for (int i = 0; i < DIRECT_PTRS; i++) {
     newnd.direct[i] = -1;
   }
-  newnd.direct[0] = alloc_dblk();
+
   fswrite(super.inode_region_addr * UFS_BLOCK_SIZE + highest_inode * sizeof(inode_t), 
           &newnd, sizeof(inode_t));
 
@@ -160,19 +169,17 @@ int creat_file(int pinum, int type, char *name) {
   dir_ent_t de;
   de.inum = highest_inode;
   strcpy(de.name, name);
-  fswrite(pind->direct[0] * UFS_BLOCK_SIZE + pind->size, 
-    &de, sizeof(dir_ent_t)); /* assume dir size <= 1 block*/
-  pind->size += sizeof(dir_ent_t);
-  write_inode(pinum, *pind);
-  fsync(fd);
+
+  if (pind->direct[0] == -1) pind->direct[0] = alloc_dblk();
+  write_file(pinum, &de, pind->size, sizeof(dir_ent_t), UFS_DIRECTORY);
   inode_dbg(pinum);
   dir_dbg(pinum);
-  return highest_inode; 
+  return 0; 
 }
 
 /*
 write_file
-param: inode-num, offset, data, nbytes
+param: inode-num, offset (0-indexed), data, nbytes
 returns: nbytes written
 
 Writes to one block or two blocks. 
@@ -180,25 +187,30 @@ Adds a data block if not enough space in current block.
 Updates inode size and direct fields.
 */
 
-int write_file(int inum, char *buf, int offset, int nbytes) {
+int write_file(int inum, void *buf, unsigned int offset, int nbytes, int type) {
   inode_t *fnd = read_inode(inum);
-  unsigned int mxd = ceil(1.0 * fnd->size / UFS_BLOCK_SIZE);
-  unsigned int mxe = fnd->size % UFS_BLOCK_SIZE;
-  unsigned int mxfree = UFS_BLOCK_SIZE - mxe;
-  if(nbytes <= mxfree) {
-    lseek(fd, fnd->direct[mxd] * UFS_BLOCK_SIZE + offset, SEEK_SET);
-    write(fd, buf, nbytes);
+  if (fnd == NULL || fnd->type != type) return -1;
+
+  unsigned int ofd = ceil(1.0 * offset / UFS_BLOCK_SIZE);
+  unsigned int ofr = offset % UFS_BLOCK_SIZE;
+  unsigned int offree = UFS_BLOCK_SIZE - ofr;
+  unsigned int d = ofd;
+  while(d >= 0 && fnd->direct[d] == -1) {
+    fnd->direct[d] = alloc_dblk();
+    d--;
+  } 
+  if(nbytes <= offree) {
+    fswrite(fnd->direct[ofd] * UFS_BLOCK_SIZE + ofr, buf, nbytes);
   } else {
-    fnd->direct[mxd + 1] = alloc_dblk();
-    lseek(fd, fnd->direct[mxd] * UFS_BLOCK_SIZE + mxe, SEEK_SET);
-    write(fd, buf, mxfree);
-    lseek(fd, fnd->direct[mxd + 1] * UFS_BLOCK_SIZE, SEEK_SET);
-    write(fd, buf + sizeof(char) * mxfree, nbytes - mxfree);
+    fnd->direct[ofd + 1] = alloc_dblk();
+    fswrite(fnd->direct[ofd] * UFS_BLOCK_SIZE + ofr, buf, offree);
+    fswrite(fnd->direct[ofd + 1] * UFS_BLOCK_SIZE, 
+      buf + sizeof(char) * offree, nbytes - offree);
   }
-  fnd->size += nbytes;
+  fnd->size = (offset + nbytes) > fnd->size ? offset + nbytes: fnd->size;
   write_inode(inum, *fnd);
   fsync(fd);
-  return nbytes;
+  return 0;
 }
 
 int alloc_dblk() {
@@ -221,20 +233,20 @@ Read from one block or two blocks as nbytes <= 4096.
 */
 int read_file(int inum, char* buf, int offset, int nbytes) {
   inode_t *fnd = read_inode(inum);
-  unsigned int mxb = ceil(1.0 * fnd->size / UFS_BLOCK_SIZE);
+  if (fnd == NULL) return -1;
+
   unsigned int rdb = ceil(1.0 * offset / UFS_BLOCK_SIZE);
   unsigned int rds = offset % UFS_BLOCK_SIZE;
   unsigned int rdf = UFS_BLOCK_SIZE - rds;
   if (nbytes <= rdf) {
-    lseek(fd, fnd->direct[rdb] * UFS_BLOCK_SIZE + rds, SEEK_SET);
-    read(fd, buf, nbytes);
+    if(fnd->direct[rdb] == -1) return -1;
+    fsread(fnd->direct[rdb] * UFS_BLOCK_SIZE + rds, buf, nbytes);
   } else {
-    lseek(fd, fnd->direct[rdb] * UFS_BLOCK_SIZE + rds, SEEK_SET);
-    read(fd, buf, rdf);
-    lseek(fd, fnd->direct[rdb + 1] * UFS_BLOCK_SIZE, SEEK_SET);
-    read(fd, buf + rdf, nbytes - rdf);
+    if(fnd->direct[rdb] == -1 || fnd->direct[rdb + 1] == -1) return -1;
+    fsread(fnd->direct[rdb] * UFS_BLOCK_SIZE + rds, buf, rdf);
+    fsread(fnd->direct[rdb + 1] * UFS_BLOCK_SIZE, buf + sizeof(char) * rdf, nbytes - rdf);
   }
-  return nbytes;
+  return 0;
 }
 
 /*
@@ -343,7 +355,7 @@ int run_udp(int port) {
         - Else throw err
         */
       dir_ent_t *de = lookup_file(buf_pk.node_num, buf_pk.name);
-      if (de != NULL && de->inum != -1) {
+      if (de != NULL) {
         rx_pk.node_num = de->inum;
       } else {
         rx_pk.node_num = -1;
@@ -365,7 +377,8 @@ int run_udp(int port) {
 
     }
     else if(buf_pk.msg == MFS_WRITE){
-      rx_pk.node_num = write_file(buf_pk.node_num, buf_pk.buf, buf_pk.offset, buf_pk.nbytes);
+      rx_pk.node_num = write_file(buf_pk.node_num, buf_pk.buf, 
+        buf_pk.offset, buf_pk.nbytes, UFS_REGULAR_FILE);
       rx_pk.msg = MFS_FEEDBACK;
       UDP_Write(sd, &s, (char*)&rx_pk, sizeof(message_t));
 

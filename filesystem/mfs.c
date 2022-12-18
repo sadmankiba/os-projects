@@ -163,40 +163,40 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
 	return 0;
 }
 
-// MFS_Write method, writes inum with given buffer, offset, and number of bytes
 int MFS_Write(int inum, char *buffer, int offset, int nbytes){
-	// message being sent
+	if (offset <= 0 || nbytes > 4096) {
+		return -1;
+	}
+
 	message_t send;
 
-	// fill the buffer field of the sending message
   	for(int i = 0; i<4096; i++){
                 send.buf[i] = buffer[i];
         }
 
-	// fill out other fields
 	send.nbytes = nbytes;
 	send.msg = MFS_WRITE;
 	send.offset = offset;
 	send.node_num = inum;
 
-	// dont forget to check taht server is funcitoning
 	if(!working){
                 return -1;
         }
-	// message client is receiving
+	
 	message_t receive;
 
-	// send between server and client
 	if(Server_To_Client(&send, &receive, my_serv, prt) <= -1){
 		return -1;
 	}
 
-	// return the inode number of the reciever
 	return receive.node_num;
 }
 
 
 int MFS_Read(int inum, char *buffer, int offset, int nbytes){	
+	if (offset < 0 || nbytes > 4096)
+		return -1;
+		
 	message_t send;
 
 	send.nbytes = nbytes;
