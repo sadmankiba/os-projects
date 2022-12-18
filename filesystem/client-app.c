@@ -13,8 +13,10 @@ int main(int argc, char *argv[]) {
 
 	assert(MFS_Lookup(0, "..") == 0);
 	assert(MFS_Lookup(0, "a.txt") == -1); 
-	assert(MFS_Creat(0, MFS_REGULAR_FILE, "a.txt") == 1);
-	assert(MFS_Lookup(0, "a.txt") == 0);
+	
+	assert(MFS_Creat(0, MFS_REGULAR_FILE, "a.txt") == 0);
+	assert(MFS_Lookup(0, "a.txt") == 1);
+	
 	return 0;
 
 	// loop through
