@@ -40,10 +40,20 @@ void test_create_dir() {
 	assert(MFS_Lookup(inum, "..") == 0);
 }
 
+void test_unlink() {
+	MFS_Creat(0, MFS_DIRECTORY, "testdir");
+	int inum = MFS_Lookup(0, "testdir");
+	MFS_Creat(inum, MFS_REGULAR_FILE, "testfile");
+
+	assert(MFS_Unlink(0, "testdir") == -1);
+	assert(MFS_Unlink(inum, "testfile") == 0);
+	assert(MFS_Unlink(0, "testdir") == 0);
+}
+
 int main(int argc, char *argv[]) {
 	MFS_Init("localhost", 3004);
 	
-	test_create_dir();
+	test_unlink();
 	return 0;
 
 	int rc = -1;

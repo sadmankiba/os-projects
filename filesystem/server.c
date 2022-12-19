@@ -323,6 +323,8 @@ int unlink_file(int pinum, char *name) {
   if (de->inum != -1) {
     inode_t *ind = (inode_t *) malloc(sizeof(inode_t));  
     read_inode(de->inum, ind);
+    debug("In unlink_file: to delete ");
+    inode_dbg(de->inum);
     if (ind->type == UFS_DIRECTORY && ind->size > 2 * sizeof(dir_ent_t)) {
       debug("In unlink_file. dir nonempty. returning ...\n");
       return -1;
@@ -332,10 +334,20 @@ int unlink_file(int pinum, char *name) {
     fswrite(addr, de, sizeof(dir_ent_t)); 
   }
 
+  /* update size */
   inode_t * pnd = (inode_t *) malloc(sizeof(inode_t));
   read_inode(pinum, pnd);
-  pnd->size = (addr < pnd->size)? addr: pnd->size;
+  int i;
+  for(i = 0; pnd->direct[i] != -1; i++) {
+    if (pnd->direct[i] = (addr / UFS_BLOCK_SIZE)) 
+      break;
+  }
+  unsigned int offset = i * UFS_BLOCK_SIZE + addr % UFS_BLOCK_SIZE;
+  pnd->size = (offset < pnd->size)? offset: pnd->size;
   write_inode(pinum, pnd);
+  debug("In unlink_file: parent ");
+  inode_dbg(pinum);
+
   debug("In unlink_file: unlinked. returning ...\n");
   return 0;
 }
