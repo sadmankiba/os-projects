@@ -12,12 +12,12 @@
 #include "message.h"
 #include "debug.h"
 
-// this will send messages between the server and client that contain
-// a message_t struct that is updated by other methods
+/* Server_To_Client: Send file operation message to server and receive feedback.
+
+Use message_t struct for messages. 
+*/
 int Server_To_Client(message_t *send, message_t *receive, char *server, int pnum)
 {
-
-	// open
 	int sd = UDP_Open(0);
 	if(sd < -1){
 		// open failure
@@ -25,23 +25,19 @@ int Server_To_Client(message_t *send, message_t *receive, char *server, int pnum
 		return -1;
 	}
 
-	// set up sock_addr structs to be used for opening
 	struct sockaddr_in sock;
 	struct sockaddr_in sock1;
 	int rc = UDP_FillSockAddr(&sock, server, pnum);
 
-	// timeval struct to keep track of time passing
 	struct timeval tv;
-	tv.tv_usec=0; // set to 0
-	tv.tv_sec=3; // set to 3
+	tv.tv_usec=0; 
+	tv.tv_sec=3; 
 
-	// check to make sure fill was successful
 	if(rc < 0){
                 perror("upd_send: failed to find host");
                 return -1;
         }
 
-	// set value to stop trying
 	int timeout = 5;
 	fd_set set;
 	while(1){
@@ -81,47 +77,37 @@ int working = 0; // make sure the server is currently working
 int prt = 10000; // base port
 
 
-// MFS_Init method, sets up server and port
+/* MFS_Init: set up server and port */
 int MFS_Init(char *hostname, int port) {
-	// set proper port
 	prt = port;
-
-	// say that server is working
 	working = 1;
-	
-	// set proper server name
 	my_serv = strdup(hostname); 
 	return 0;
 }
 
-// MFS_Lookup, looks up name based on given pinum and name
+/* MFS_Lookup: looks up name based on given pinum and name 
+returns: inum on success, -1 on failure
+*/
 int MFS_Lookup(int pinum, char *name){
-	// fail if name is too large
-	if(strlen(name) > 28){
-		return -1;
-	}
-	// fail if name is null
-	if(name == NULL){
+	debug("In MFS_Lookup: entering ...\n");
+
+	if(name == NULL || strlen(name) > 28){
 		return -1;
 	}
 
-	// create sending message
 	message_t send;
 
-	// set fields of the message
 	send.node_num = pinum;
 	strcpy((char*)&(send.name), name);
 	send.msg = MFS_LOOKUP;
 
-	// make sure server is currently working
+	
 	if(!working){
         return -1;
     }
 
-	// create receiving message
 	message_t receive;
 
-	// send the message to the client
 	int ret = Server_To_Client( &send, &receive, my_serv, prt);
 	debug("In MFS_Lookup: server retcode %d, received inum %d\n", ret, receive.node_num);
 		
@@ -134,8 +120,13 @@ int MFS_Lookup(int pinum, char *name){
 	}
 }
 
-// MFS_Stat method, takes in stat structure and inum used to get stats of a message
+/* MFS_Stat: takes inum 
+returns: 0 on success, 1 on failure
+
+Fills up stat of a file
+*/
 int MFS_Stat(int inum, MFS_Stat_t *m) {
+	debug("In MFS_Stat: entering ...\n");
 	message_t send;
 	send.msg = MFS_STAT;
 	send.node_num = inum;
@@ -154,19 +145,21 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
 	m->type = receive.st.type;
 	m->size = receive.st.size;
 
+	debug("In MFS_Stat: success. returning ...\n");
 	return 0;
 }
 
 int MFS_Write(int inum, char *buffer, int offset, int nbytes){
-	if (offset <= 0 || nbytes > 4096) {
+	debug("In MFS_Write. entering ...\n");
+	if (offset < 0 || nbytes > 4096) {
 		return -1;
 	}
 
 	message_t send;
 
   	for(int i = 0; i<4096; i++){
-                send.buf[i] = buffer[i];
-        }
+        send.buf[i] = buffer[i];
+    }
 
 	send.nbytes = nbytes;
 	send.msg = MFS_WRITE;
@@ -174,8 +167,8 @@ int MFS_Write(int inum, char *buffer, int offset, int nbytes){
 	send.node_num = inum;
 
 	if(!working){
-                return -1;
-        }
+        return -1;
+    }
 	
 	message_t receive;
 
@@ -183,11 +176,13 @@ int MFS_Write(int inum, char *buffer, int offset, int nbytes){
 		return -1;
 	}
 
+	debug("In MFS_Write: ret %d. returning ...\n", receive.node_num);
 	return receive.node_num;
 }
 
 
 int MFS_Read(int inum, char *buffer, int offset, int nbytes){	
+	debug("In MFS_Read: entering ...\n");
 	if (offset < 0 || nbytes > 4096)
 		return -1;
 		
@@ -208,28 +203,20 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes){
 		return -1;
 	}
 
-	// different than write, need to make sure the inum is not negative
-	if(receive.node_num >= 0) {
-
-		// loop through and get proper buffer
-		for(int i = 0; i<4096; i++){
-			// reversed this time
+	if(receive.node_num == 0) {
+		for(int i = 0; i < nbytes; i++){
 			buffer[i] = receive.buf[i];
 		}
 	}
 
+	debug("In MFS_Read: ret %d. returning ... \n", receive.node_num);
 	return receive.node_num;
 }
 
-// MFS_Creat creates a dir/file based on typ with a name and pinum specified in parameters
+/* MFS_Creat: Create a dir/file based on type with a name and pinum */
 int MFS_Creat(int pinum, int type, char *name){
-	// check if name is null
-	if(name == NULL){
-		return -1;
-	}
-
-	
-	if(strlen(name) > 28){
+	debug("In MFS_Creat: entering ...\n");
+	if(name == NULL || strlen(name) > 28){
 		return -1;
 	}
 
@@ -240,31 +227,27 @@ int MFS_Creat(int pinum, int type, char *name){
 	send.node_num = pinum;
 	strcpy(send.name, name);
 	
-	// almost forgot to make sure server is online!
+	
 	if(!working){
                 return -1;
         }
 
-	// receive the message
+	
 	message_t receive;
 
-	// do the transaction	
 	if(Server_To_Client(&send, &receive, my_serv, prt) <= -1){
 		return -1;
 	}
 
+	debug("In MFS_Creat. ret %d returning ...\n", receive.node_num);
 	return receive.node_num;
 }
 
 // MFS_Unlilnk method, unlinks based on pinum and name parameters
 int MFS_Unlink(int pinum, char *name){
-	// check name length
-	if(strlen(name) > 28){
-		return -1;
-	}
+	debug("In MFS_Unlink: entering ...");
 
-	// check that name is valid
-	if(name == NULL){
+	if(name == NULL || strlen(name) > 28){
 		return -1;
 	}
 
@@ -289,10 +272,12 @@ int MFS_Unlink(int pinum, char *name){
 		return -1;
 	}
 
+	debug("In MFS_Unlink: ret %d returning ...\n", receive.node_num);
 	return receive.node_num;
 }
 
 int MFS_Shutdown(){
+	debug("In MFS_Shutdown. entering ... \n");
 	message_t send;
 	send.msg = MFS_SHUTDOWN;
 	message_t receive;
@@ -301,5 +286,6 @@ int MFS_Shutdown(){
 		return -1;
 	}
 
+	debug("In MFS_Shutdown. returning ...\n");
 	return 0;
 }

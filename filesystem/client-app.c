@@ -5,20 +5,32 @@
 #include "message.h"
 #include "ufs.h"
 
-int main(int argc, char *argv[]) {
-
-	// initialize the server
-	MFS_Init("localhost", 3004);
-	int rc = -1;
-
+void test_lookup() {
 	assert(MFS_Lookup(0, "..") == 0);
 	assert(MFS_Lookup(0, "a.txt") == -1); 
-	
+}
+
+void test_create() {
 	assert(MFS_Creat(0, MFS_REGULAR_FILE, "a.txt") == 0);
 	assert(MFS_Lookup(0, "a.txt") == 1);
+}
+
+void test_write() {
+	MFS_Creat(0, MFS_REGULAR_FILE, "a.txt");
+	int inum = MFS_Lookup(0, "a.txt");
+	char buf[30] = "abcde";
+	assert(MFS_Write(inum, buf, 0, 6) == 0);
+	assert(MFS_Read(inum, buf, 2, 4) == 0);
+	assert(strcmp(buf, "cde") == 0); 
+}
+
+int main(int argc, char *argv[]) {
+	MFS_Init("localhost", 3004);
 	
+	test_write();
 	return 0;
 
+	int rc = -1;
 	// loop through
 	for(int i = 0; i < 1; i++) {
 		int index = i;
