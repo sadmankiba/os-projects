@@ -1,5 +1,5 @@
 CC     := gcc
-CFLAGS := -DDEBUG
+CFLAGS := 		# Add CFLAGS=-DDEBUG with make to turn on debug
 
 SRCS   := mkfs.c
 

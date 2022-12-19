@@ -24,10 +24,26 @@ void test_write() {
 	assert(strcmp(buf, "cde") == 0); 
 }
 
+void test_stat() {
+	MFS_Creat(0, MFS_REGULAR_FILE, "a.txt");
+	int inum = MFS_Lookup(0, "a.txt");
+	MFS_Stat_t st;
+	assert(MFS_Stat(inum, &st) == 0);
+	assert(st.size == 0);
+	assert(st.type == 1);
+}
+
+void test_create_dir() {
+	MFS_Creat(0, MFS_DIRECTORY, "test");
+	int inum = MFS_Lookup(0, "test");
+	assert(MFS_Lookup(inum, ".") == inum);
+	assert(MFS_Lookup(inum, "..") == 0);
+}
+
 int main(int argc, char *argv[]) {
 	MFS_Init("localhost", 3004);
 	
-	test_write();
+	test_create_dir();
 	return 0;
 
 	int rc = -1;

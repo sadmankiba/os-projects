@@ -106,7 +106,8 @@ void write_inode(int inum, inode_t *inode) {
 /*
 lookup_file: Find a file in a parent directory
 params: parent-inum, file-name, 
-returns: dir_ent and addr if found, NULL if not
+returns: dir_ent and addr if found, 
+    NULL if par inode not found, par inode not dir or file not found
 
 Iterates over directory entries in data block of parent to find a file. 
 */
@@ -144,6 +145,11 @@ return: 0 on success, -1 on failure
 */
 int creat_file(int pinum, int type, char *name) {
   debug("In creat_file: to create file %s. entering ...\n", name);
+  /* Check if par is dir*/
+  inode_t *pnd = (inode_t *) malloc(sizeof(inode_t));
+  read_inode(pinum, pnd);
+  if(pnd == NULL || pnd ->type != UFS_DIRECTORY) return -1;
+
   /* Check if name already exists */
   unsigned int addr;
   dir_ent_t* lde = lookup_file(pinum, name, &addr);
@@ -152,25 +158,30 @@ int creat_file(int pinum, int type, char *name) {
   int ninum = new_inode(type);
   if (ninum == -1) return -1;
 
+  /* if new dir, add . and .. */
+  if (type == UFS_DIRECTORY) {
+    inode_t *nnd = (inode_t *) malloc(sizeof(inode_t));
+    read_inode(ninum, nnd);
+
+    int ndb = alloc_dblk();
+    if (ndb == -1) return -1;
+    nnd->direct[0] = ndb;
+    
+    dir_block_t db;
+    strcpy(db.entries[0].name, "."); 
+    db.entries[0].inum = ninum;
+    strcpy(db.entries[1].name, "..");
+    db.entries[1].inum = pinum; 
+    for (int i = 2; i < UFS_BLOCK_SIZE / sizeof(dir_ent_t); i++)
+      db.entries[i].inum = -1;
+    fswrite(ndb * UFS_BLOCK_SIZE, &db, sizeof(dir_block_t));
+    nnd->size = 2 * sizeof(dir_ent_t);
+    write_inode(ninum, nnd);
+  }
+
   /* write in parent data*/
   inode_t *pind = (inode_t *) malloc(sizeof(inode_t));
   read_inode(pinum, pind);
-  
-  if (pind->direct[0] == -1) { /* if pdir not have any data block yet */
-    int ndb = alloc_dblk();
-    if (ndb == -1) return -1;
-    pind->direct[0] = ndb;
-    write_inode(pinum, pind);
-    dir_block_t db;
-    strcpy(db.entries[0].name, "."); 
-    db.entries[0].inum = pinum;
-    strcpy(db.entries[1].name, "..");
-    db.entries[1].inum = pinum; /* incorrect */
-    fswrite(ndb * UFS_BLOCK_SIZE, &db, sizeof(dir_block_t));
-    pind->size = 2 * sizeof(dir_ent_t);
-    write_inode(pinum, pind);
-  }
-
   dir_ent_t de;
   de.inum = ninum;
   strcpy(de.name, name);
@@ -312,7 +323,7 @@ int unlink_file(int pinum, char *name) {
   if (de->inum != -1) {
     inode_t *ind = (inode_t *) malloc(sizeof(inode_t));  
     read_inode(de->inum, ind);
-    if (ind->type == UFS_DIRECTORY && ind->size > 0) {
+    if (ind->type == UFS_DIRECTORY && ind->size > 2 * sizeof(dir_ent_t)) {
       debug("In unlink_file. dir nonempty. returning ...\n");
       return -1;
     }
@@ -320,6 +331,11 @@ int unlink_file(int pinum, char *name) {
     de->inum = -1;
     fswrite(addr, de, sizeof(dir_ent_t)); 
   }
+
+  inode_t * pnd = (inode_t *) malloc(sizeof(inode_t));
+  read_inode(pinum, pnd);
+  pnd->size = (addr < pnd->size)? addr: pnd->size;
+  write_inode(pinum, pnd);
   debug("In unlink_file: unlinked. returning ...\n");
   return 0;
 }
