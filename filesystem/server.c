@@ -43,7 +43,6 @@ int fswrite(unsigned int addr, void *ptr, size_t nbytes) {
     addr / UFS_BLOCK_SIZE, addr % UFS_BLOCK_SIZE, nbytes);
   lseek(fd, addr, SEEK_SET);
   int rc = write(fd, ptr, nbytes);
-  fsync(fd);
   return rc;
 }
 
