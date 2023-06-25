@@ -10,27 +10,30 @@ MODULE_DESCRIPTION("Locking example module");
 MODULE_AUTHOR("Sadman Sakib");
 MODULE_LICENSE("GPL");
 
-// static DEFINE_SPINLOCK(my_lock);
+static DEFINE_SPINLOCK(my_lock);
 static int count = 0;
 struct task_struct *thread1, *thread2;
 
 int incr(void *arg)
 {
     int i;
-    // spin_lock(&my_lock);
+    /* Even without spin_lock, count is increased to the correct value
+    by two threads even for 10M iter. */
+    spin_lock(&my_lock);
     /* critical section */
-    for (i = 0; i < 10000; i++) {
+    for (i = 0; i < 10000000; i++) {
         count++;
+        /* Adding msleep results in an error about PC */
         // msleep(1);
     }
-    // spin_unlock(&my_lock);
+    spin_unlock(&my_lock);
     return 0;
 }
 
 static int locking_init(void)
 {
 	pr_debug("Hello!\n");
-    // spin_lock_init(&my_lock);
+    spin_lock_init(&my_lock);
     
     thread1 = kthread_create(incr, NULL, "thread1");
     if (thread1) {
@@ -55,6 +58,7 @@ static int locking_init(void)
 
 static void locking_exit(void)
 {
+    /* Adding kthread_stop results in Segmentation fault */
 	// kthread_stop(thread1);
     // kthread_stop(thread2);
     pr_debug("count = %d\n", count);
