@@ -3,10 +3,10 @@
 #include <linux/kernel.h>
 
 MODULE_DESCRIPTION("Simple module");
-MODULE_AUTHOR("Kernel Hacker");
+MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
 
-static int my_hello_init(void)
+static int hello_init(void)
 {
 	pr_debug("Hello!\n");
 	return 0;
@@ -17,5 +17,5 @@ static void hello_exit(void)
 	pr_debug("Goodbye!\n");
 }
 
-module_init(my_hello_init);
+module_init(hello_init);
 module_exit(hello_exit);
