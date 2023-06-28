@@ -8,10 +8,16 @@ MODULE_DESCRIPTION("List example");
 MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
 
+/* Example of list and atomic */
+
 struct port_rec {
     struct list_head list;
     int num;
+    unsigned long timestamp;
+    atomic_t count;
 };
+
+struct port_rec * search_port(int num);
 
 /*
 struct list_head my_list;
@@ -22,8 +28,15 @@ LIST_HEAD(my_list);
 LIST_HEAD(my_list); 
 
 int add_port(int num) {
-    struct port_rec *pr = kzalloc(sizeof(struct port_rec), GFP_KERNEL);
+    struct port_rec *pr;
+    if((pr = search_port(num)) != NULL) {
+        atomic_inc(&pr->count);
+        return 0;
+    }
+    pr = kzalloc(sizeof(struct port_rec), GFP_KERNEL);
     pr->num = num;
+    pr->timestamp = jiffies;
+    atomic_set(&pr->count, 1);
     list_add(&pr->list, &my_list);
     return 0;
 }
@@ -51,11 +64,20 @@ void delete_all(void) {
     }
 }
 
+struct port_rec * search_port(num) {
+    struct port_rec *pr;
+    list_for_each_entry(pr, &my_list, list) {
+        if(pr->num == num)
+            return pr;
+    }
+    return NULL;
+}
+
 void print_list(void) {
     struct port_rec *pr;
     pr_debug("List: ");
     list_for_each_entry(pr, &my_list, list) {
-        pr_debug("%d ", pr->num);
+        pr_debug("num = %d, timestamp = %lu, count = %d", pr->num, pr->timestamp, atomic_read(&pr->count));
     }
 }
 
@@ -64,6 +86,8 @@ static int listex_init(void)
 	pr_debug("init listex");
     add_port(4000);
     add_port(3000);
+    add_port(8000);
+    add_port(4000);
     add_port(8000);
     print_list();
 	return 0;
