@@ -2,7 +2,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>        /* task_struct */
-#include <linux/sched/signal.h> /* for_each_process */
+#include <linux/sched/signal.h> /* for_each_process, next_task */
 
 
 MODULE_DESCRIPTION("Kernel process");
