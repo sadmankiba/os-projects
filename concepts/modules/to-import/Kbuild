@@ -1,0 +1,5 @@
+ccflags-y = -Wno-unused-function -Wno-unused-label -Wno-unused-variable -DDEBUG
+
+KBUILD_EXTRA_SYMBOLS = /home/sadman/GitRepos/Sys/Intro-to-OS-Assignments/concepts/modules/to-export/Module.symvers
+
+obj-m = to-import.o
