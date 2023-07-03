@@ -19,9 +19,18 @@ static int kcache_init(void)
 	pr_debug("kcache init!\n");
 	
 	cache = kmem_cache_create("my_cache", 100, 0, 0, NULL);
-	foo = kmem_cache_alloc(cache, GFP_KERNEL);
+	foo = kmem_cache_alloc(cache, GFP_KERNEL); 
 	foo->a = 1;
 	foo->b = 2;
+	pr_debug("foo->a = %d, foo->b = %d\n", foo->a, foo->b);
+	kmem_cache_free(cache, foo);
+	kmem_cache_destroy(cache);
+
+	/* Creating cache exactly as a struct size */
+	cache = KMEM_CACHE(Foo, 0);
+	foo = kmem_cache_alloc(cache, GFP_KERNEL);
+	foo->a = 3;
+	foo->b = 4;
 	pr_debug("foo->a = %d, foo->b = %d\n", foo->a, foo->b);
 	kmem_cache_free(cache, foo);
 	kmem_cache_destroy(cache);
