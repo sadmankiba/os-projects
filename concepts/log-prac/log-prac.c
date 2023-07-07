@@ -3,23 +3,23 @@
 #include <linux/kernel.h>
 #include <linux/printk.h>
 
-#include "sl_core_log.h"
+#include "mod_log.h"
 
-MODULE_DESCRIPTION("Simple module");
+MODULE_DESCRIPTION("log_prac module");
 MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
 
-struct sl_core_link {
+struct mod_comp {
 	unsigned int num;
 };
 
 static int log_prac_init(void)
 {
-	struct sl_core_link link;
+	struct mod_comp comp;
 	char *state_str = "UP";
 	pr_debug("log_prac init!\n");
-	sl_core_log_dbg(&link, SL_CORE_LINK_AN_LOG_NAME, "lp caps get");
-	sl_core_log_err(&link, SL_CORE_LINK_AN_LOG_NAME,
+	mod_log_dbg(&comp, MOD_PART1_NAME, "lp caps get");
+	mod_log_err(&comp, MOD_PART2_NAME,
 			"lp caps get - invalid (state = %s)", state_str);
 	return 0;
 }

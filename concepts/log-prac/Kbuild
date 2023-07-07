@@ -1,4 +1,4 @@
 ccflags-y = -Wno-unused-function -Wno-unused-label -Wno-unused-variable -DDEBUG
 
 obj-m = log-pr.o
-log-pr-y = log-prac.o sl_core_log.o 
+log-pr-y = log-prac.o mod_log.o 

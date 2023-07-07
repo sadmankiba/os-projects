@@ -2,7 +2,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 
-MODULE_DESCRIPTION("Simple module");
+MODULE_DESCRIPTION("hello module");
 MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
 
