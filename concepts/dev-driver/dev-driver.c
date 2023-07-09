@@ -3,6 +3,7 @@
 #include <linux/kernel.h>
 #include <linux/fs.h> /* register, MKDEV, file, inode, file_operations */
 #include <linux/cdev.h> /* cdev_* */
+#include <linux/sched.h> /* set_current_state */
 
 MODULE_DESCRIPTION("Simple module");
 MODULE_AUTHOR("Kernel Practitioner");
@@ -13,17 +14,30 @@ MODULE_LICENSE("GPL");
 #define NUM_DEVS 1
 #define DEV_NAME "sadman-dev"
 
+#define DEV_FREE 0
+#define DEV_BUSY 1
+
 struct dev_info {
 	struct cdev cdev;
+	atomic_t opened;
 };
 
 struct dev_info dinfo;
 
 int cdev_open(struct inode *ind, struct file *f) {
+	pr_debug(DEV_NAME " opened");
+	
+	if(atomic_cmpxchg(&dinfo.opened, DEV_FREE, DEV_BUSY) == DEV_BUSY) {
+		return -EBUSY;
+	}
+	set_current_state(TASK_INTERRUPTIBLE);
+	schedule_timeout(1000);
 	return 0;
 }
 
 int cdev_release(struct inode *ind, struct file *f) {
+	pr_debug(DEV_NAME " released");
+	atomic_cmpxchg(&dinfo.opened, DEV_BUSY, DEV_FREE);
 	return 0;
 }
 
@@ -57,6 +71,7 @@ static int dev_driver_init(void)
 
 	cdev_init(&dinfo.cdev, &fops);
 	cdev_add(&dinfo.cdev, MKDEV(DEV_MAJOR, DEV_MINOR), NUM_DEVS);
+	atomic_set(&dinfo.opened, 0);
 	return 0;
 }
 
