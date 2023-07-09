@@ -50,7 +50,8 @@ static int dev_driver_init(void)
 	pr_debug("dev_driver init!\n");
 	err = register_chrdev_region(MKDEV(DEV_MAJOR, DEV_MINOR), NUM_DEVS, DEV_NAME);
 	if (err) {
-		pr_debug("Error in register chrdev");
+		pr_debug("Error in register chrdev: %d", err);
+		return err;
 	}
 	pr_debug(DEV_NAME " registered");
 
