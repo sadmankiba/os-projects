@@ -72,7 +72,20 @@ ssize_t cdev_read(struct file *f, char *buf, size_t size, loff_t *offset) {
 }
 
 ssize_t cdev_write(struct file *f, const char *buf, size_t size, loff_t *offset) {
-	return 0;
+	struct dev_info *dinfo;
+	int err;
+
+	pr_debug(DEV_NAME " writing at offset %lld, size %lu", *offset, size);
+	dinfo = (struct dev_info *) f->private_data;
+	// if (size > strlen(dinfo->data) - *offset) {
+	// 	size = strlen(dinfo->data) - *offset;
+	// }
+	err = copy_from_user(dinfo->data, buf, size);
+	if (err) 
+		return err;
+
+	// *offset = *offset + size;
+	return size;
 }
 
 static const struct file_operations fops = {
