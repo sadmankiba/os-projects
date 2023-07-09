@@ -4,6 +4,7 @@
 #include <linux/fs.h> /* register, MKDEV, file, inode, file_operations */
 #include <linux/cdev.h> /* cdev_* */
 #include <linux/sched.h> /* set_current_state */
+#include <linux/string.h> /* strlen */
 
 MODULE_DESCRIPTION("Simple module");
 MODULE_AUTHOR("Kernel Practitioner");
@@ -17,17 +18,25 @@ MODULE_LICENSE("GPL");
 #define DEV_FREE 0
 #define DEV_BUSY 1
 
+#define MSG "You are reading sadman-dev!"
+
 struct dev_info {
 	struct cdev cdev;
 	atomic_t opened;
+	char data[100];
 };
 
 struct dev_info dinfo;
 
 int cdev_open(struct inode *ind, struct file *f) {
+	struct dev_info *dinfo;
+
 	pr_debug(DEV_NAME " opened");
 	
-	if(atomic_cmpxchg(&dinfo.opened, DEV_FREE, DEV_BUSY) == DEV_BUSY) {
+	dinfo = container_of(ind->i_cdev, struct dev_info, cdev);
+	f->private_data = dinfo;
+
+	if(atomic_cmpxchg(&dinfo->opened, DEV_FREE, DEV_BUSY) == DEV_BUSY) {
 		return -EBUSY;
 	}
 	set_current_state(TASK_INTERRUPTIBLE);
@@ -36,13 +45,30 @@ int cdev_open(struct inode *ind, struct file *f) {
 }
 
 int cdev_release(struct inode *ind, struct file *f) {
+	struct dev_info *dinfo;
+
 	pr_debug(DEV_NAME " released");
-	atomic_cmpxchg(&dinfo.opened, DEV_BUSY, DEV_FREE);
+	
+	dinfo = (struct dev_info *) f->private_data;
+	atomic_cmpxchg(&dinfo->opened, DEV_BUSY, DEV_FREE);
 	return 0;
 }
 
 ssize_t cdev_read(struct file *f, char *buf, size_t size, loff_t *offset) {
-	return 0;
+	struct dev_info *dinfo;
+	int err;
+
+	pr_debug(DEV_NAME " reading at offset %lld, size %lu", *offset, size);
+	dinfo = (struct dev_info *) f->private_data;
+	if (size > strlen(dinfo->data) - *offset) {
+		size = strlen(dinfo->data) - *offset;
+	}
+	err = copy_to_user(buf, dinfo->data, size);
+	if (err) 
+		return err;
+
+	*offset = *offset + size;
+	return size;
 }
 
 ssize_t cdev_write(struct file *f, const char *buf, size_t size, loff_t *offset) {
@@ -72,6 +98,7 @@ static int dev_driver_init(void)
 	cdev_init(&dinfo.cdev, &fops);
 	cdev_add(&dinfo.cdev, MKDEV(DEV_MAJOR, DEV_MINOR), NUM_DEVS);
 	atomic_set(&dinfo.opened, 0);
+	memcpy((char *) dinfo.data, MSG, strlen(MSG) + 1);
 	return 0;
 }
 
