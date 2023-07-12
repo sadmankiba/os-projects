@@ -2,7 +2,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/fs.h> /* register, MKDEV, file, inode, file_operations */
-#include <linux/cdev.h> /* cdev_* */
+#include <linux/cdev.h> /* struct cdev, cdev_* */
 #include <linux/sched.h> /* set_current_state */
 #include <linux/string.h> /* strlen */
 
