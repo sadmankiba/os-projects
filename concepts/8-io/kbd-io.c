@@ -18,7 +18,9 @@ MODULE_LICENSE("GPL");
 
 #define IOP_START 0x61
 #define IOP_LEN 1
-#define IRQ_NUM 13
+#define KBD_IRQ_NUM 1
+#define NW_IRQ_NUM 21
+#define IRQ_NUM NW_IRQ_NUM
 
 #define DATA_BUF_SIZE 100
 
@@ -34,8 +36,8 @@ struct devio_info *dioinf;
 irqreturn_t kbd_intr_handler(int irq, void *dev_id)
 {
 	struct devio_info *info = (struct devio_info *) dev_id;
-	pr_debug("kbd_intr_handler called!\n");
-	return IRQ_HANDLED;
+	pr_debug("kbd_intr_handler called for IRQ %d!", irq);
+	return IRQ_NONE;
 }
 
 int kbd_open(struct inode *ind, struct file *f)
@@ -132,10 +134,10 @@ static int kbd_io_init(void)
 	pr_debug("I/O port %d requested!", IOP_START);
 	err = request_irq(IRQ_NUM, kbd_intr_handler, IRQF_SHARED, "kbd_intr", dioinf);
 	if(err) {
-		pr_debug("IRQ %d failed!", IRQ_NUM);
+		pr_debug("IRQ %d register failed!", IRQ_NUM);
 		return err;
 	} else
-		pr_debug("IRQ %d succeeded!", IRQ_NUM);
+		pr_debug("IRQ %d register succeeded!", IRQ_NUM);
 
 	return 0;
 }

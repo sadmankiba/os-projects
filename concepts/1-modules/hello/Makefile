@@ -5,7 +5,10 @@ KDIR ?= /lib/modules/`uname -r`/build
 all:
 	make -C $(KDIR) M=$(PWD) modules
 
-clean:	
+clean: 
+	rm *.mod.c *.o *.ko *.mod *.symvers *.order
+	
+clean-mod:	
 	make -C $(KDIR) M=$(PWD) modules clean
 
 .PHONY: all clean
