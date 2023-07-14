@@ -6,6 +6,8 @@
 #include <linux/sched.h> /* set_current_state */
 #include <linux/string.h> /* strlen */
 
+#include "dev-driver.h"
+
 MODULE_DESCRIPTION("Simple module");
 MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
@@ -88,12 +90,26 @@ ssize_t cdev_write(struct file *f, const char *buf, size_t size, loff_t *offset)
 	return size;
 }
 
+long cdev_ioctl(struct file *f, unsigned int cmd, unsigned long arg) {
+	struct dev_info *dinfo;
+
+	pr_debug(DEV_NAME " ioctl called with cmd %d", cmd);
+	dinfo = (struct dev_info *) f->private_data;
+	if (cmd == IOCTL_PRINT_CMD) {
+		pr_debug("Ioctl data: %s", ((struct ioc_data *) arg)->msg);
+		return 0;
+	} else {
+		return -EINVAL;
+	}
+}
+
 static const struct file_operations fops = {
 	.owner = THIS_MODULE,
 	.open = cdev_open,
 	.release = cdev_release, 
 	.read = cdev_read,
-	.write = cdev_write
+	.write = cdev_write,
+	.unlocked_ioctl = cdev_ioctl,
 };
 
 static int dev_driver_init(void)
