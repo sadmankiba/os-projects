@@ -20,7 +20,8 @@ MODULE_LICENSE("GPL");
 #define IOP_LEN 1
 #define KBD_IRQ_NUM 1
 #define NW_IRQ_NUM 21
-#define IRQ_NUM NW_IRQ_NUM
+#define CURSOR_IRQ_NUM 38
+#define IRQ_NUM CURSOR_IRQ_NUM
 
 #define DATA_BUF_SIZE 100
 
@@ -37,6 +38,13 @@ irqreturn_t kbd_intr_handler(int irq, void *dev_id)
 {
 	struct devio_info *info = (struct devio_info *) dev_id;
 	pr_debug("kbd_intr_handler called for IRQ %d!", irq);
+	return IRQ_NONE;
+}
+
+irqreturn_t cursor_intr_handler(int irq, void *dev_id)
+{
+	struct devio_info *info = (struct devio_info *) dev_id;
+	pr_debug("cursor_intr_handler called for IRQ %d!", irq);
 	return IRQ_NONE;
 }
 
