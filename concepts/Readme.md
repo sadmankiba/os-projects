@@ -27,3 +27,8 @@ Test interrupt registration
 ```
 cat /proc/interrupts
 ```
+
+Check number of interrupts on IRQs
+```
+cat /proc/stat | grep intr
+```

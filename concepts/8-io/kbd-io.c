@@ -12,16 +12,16 @@ MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
 
 #define KBD_DEV_MAJOR 174
-#define KBD_DEV_MINOR 7
+#define KBD_DEV_MINOR 2
 #define KBD_DEV_NR_DEVS 1
 #define KBD_DEV_NAME "kbd_dev"
 
 #define IOP_START 0x61
 #define IOP_LEN 1
 #define KBD_IRQ_NUM 1
-#define NW_IRQ_NUM 21
 #define CURSOR_IRQ_NUM 38
-#define IRQ_NUM CURSOR_IRQ_NUM
+#define UNK_IRQ_NUM 65
+#define IRQ_NUM UNK_IRQ_NUM
 
 #define DATA_BUF_SIZE 100
 
@@ -34,17 +34,18 @@ struct devio_info {
 
 struct devio_info *dioinf;
 
-irqreturn_t kbd_intr_handler(int irq, void *dev_id)
+irqreturn_t intr_handler(int irq, void *dev_id)
 {
 	struct devio_info *info = (struct devio_info *) dev_id;
-	pr_debug("kbd_intr_handler called for IRQ %d!", irq);
-	return IRQ_NONE;
-}
+	int i;
+	unsigned int addr = 0x1026;
 
-irqreturn_t cursor_intr_handler(int irq, void *dev_id)
-{
-	struct devio_info *info = (struct devio_info *) dev_id;
-	pr_debug("cursor_intr_handler called for IRQ %d!", irq);
+	pr_debug("intr_handler called for IRQ %d!", irq);
+	
+	for (i = 0; i < 10; i++) {
+		pr_debug("%x: %u", addr, inb(addr));
+		addr += 16;
+	}
 	return IRQ_NONE;
 }
 
@@ -140,7 +141,7 @@ static int kbd_io_init(void)
 	
 	request_region(IOP_START, IOP_LEN, "kbd_io");
 	pr_debug("I/O port %d requested!", IOP_START);
-	err = request_irq(IRQ_NUM, kbd_intr_handler, IRQF_SHARED, "kbd_intr", dioinf);
+	err = request_irq(IRQ_NUM, intr_handler, IRQF_SHARED, "kbd_intr", dioinf);
 	if(err) {
 		pr_debug("IRQ %d register failed!", IRQ_NUM);
 		return err;
@@ -163,7 +164,7 @@ static void kbd_io_exit(void)
 
 	kfree(dioinf);
 
-	pr_debug("kbd_io exit!\n");
+	pr_debug("kbd_io exit!");
 }
 
 module_init(kbd_io_init);
