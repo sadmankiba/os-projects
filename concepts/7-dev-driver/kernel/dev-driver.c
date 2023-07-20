@@ -92,11 +92,16 @@ ssize_t cdev_write(struct file *f, const char *buf, size_t size, loff_t *offset)
 
 long cdev_ioctl(struct file *f, unsigned int cmd, unsigned long arg) {
 	struct dev_info *dinfo;
+	struct ioc_data *iocd;
+	int err; 
 
 	pr_debug(DEV_NAME " ioctl called with cmd %d", cmd);
 	dinfo = (struct dev_info *) f->private_data;
 	if (cmd == IOCTL_PRINT_CMD) {
-		pr_debug("Ioctl data: %s", ((struct ioc_data *) arg)->msg);
+		err = copy_from_user(iocd, (struct ioc_data *) arg, sizeof(struct ioc_data));
+		if (err) 
+			return err;
+		pr_debug("Ioctl data: %s", iocd->msg);
 		return 0;
 	} else {
 		return -EINVAL;

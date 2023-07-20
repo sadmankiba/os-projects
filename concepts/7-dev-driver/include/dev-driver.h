@@ -1,6 +1,8 @@
 #ifndef _DEV_DRIVER_H
 #define _DEV_DRIVER_H
 
+#include <linux/ioctl.h>
+
 struct ioc_data {
     char msg[100];
 };
