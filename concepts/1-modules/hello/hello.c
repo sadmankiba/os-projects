@@ -8,13 +8,13 @@ MODULE_LICENSE("GPL");
 
 static int hello_init(void)
 {
-	pr_debug("hello init!\n");
+	pr_debug("hello init!");
 	return 0;
 }
 
 static void hello_exit(void)
 {
-	pr_debug("hello exit!\n");
+	pr_debug("hello exit!");
 }
 
 module_init(hello_init);
