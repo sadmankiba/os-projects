@@ -6,3 +6,6 @@
 *.d
 Module.symvers
 modules.order
+
+# c object files
+*.out

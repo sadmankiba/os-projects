@@ -67,7 +67,7 @@ int cdev_mmap(struct file *f, struct vm_area_struct *vma) {
 
 	phys = virt_to_phys((void *) dinfo->data);
 	pfn = phys >> PAGE_SHIFT;
-	pr_debug("phy addr: %lu (%x), pfn: %lu (%x)\n", phys, phys, pfn, pfn);
+	pr_debug("phy addr: %lu (%lx), pfn: %lu (%lx)\n", phys, phys, pfn, pfn);
 
 	if (remap_pfn_range(vma, start, pfn, size, vma->vm_page_prot)) {
 		pr_debug("remap failed\n");
