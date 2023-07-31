@@ -58,16 +58,17 @@ int cdev_mmap(struct file *f, struct vm_area_struct *vma) {
 	unsigned long size = (unsigned long) (vma->vm_end - vma->vm_start);
 	struct dev_info *dinfo = (struct dev_info *) f->private_data;
 
-	pr_debug("mmap called, start: %lu, size: %lu\n", start, size);
+	pr_debug("mmap called, requested virt addr start: 0x%lx (%lu), size: %lu\n", start, start, size);
 
 	if (size > PAGE_SIZE) {
 		pr_debug("Size too large\n");
 		return -EINVAL;
 	}
 
+	pr_debug("alloced virt addr: %p (%lu)\n", dinfo->data, dinfo->data);
 	phys = virt_to_phys((void *) dinfo->data);
 	pfn = phys >> PAGE_SHIFT;
-	pr_debug("phy addr: %lu (%lx), pfn: %lu (%lx)\n", phys, phys, pfn, pfn);
+	pr_debug("alloced phy addr: 0x%lx (%lu), pfn: 0x%lx (%lu)\n", phys, phys, pfn, pfn);
 
 	if (remap_pfn_range(vma, start, pfn, size, vma->vm_page_prot)) {
 		pr_debug("remap failed\n");
