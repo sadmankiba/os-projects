@@ -52,6 +52,52 @@ int cdev_release(struct inode *ind, struct file *f) {
 	return 0;
 }
 
+int cdev_read(struct file *f, char __user *buf, size_t len, loff_t *off) {
+	struct dev_info *dinfo = (struct dev_info *) f->private_data;
+	int ret;
+
+	pr_debug("read called, requested len: %lu", len);
+
+	if (len > PAGE_SIZE) {
+		pr_debug("Size too large");
+		return -EINVAL;
+	}
+
+	pr_debug("Device data contains: %s", dinfo->data);
+	ret = copy_to_user(buf, dinfo->data, len);
+	if (ret) {
+		pr_debug("copy_to_user failed");
+		return -EFAULT;
+	}
+	pr_debug("copy_to_user succeeded");
+	pr_debug("Now device data contains: %s", dinfo->data);
+
+	return 0;
+}
+
+int cdev_write(struct file *f, const char __user *buf, size_t len, loff_t *off) {
+	struct dev_info *dinfo = (struct dev_info *) f->private_data;
+	int ret;
+
+	pr_debug("write called, requested len: %lu", len);
+
+	if (len > PAGE_SIZE) {
+		pr_debug("Size too large");
+		return -EINVAL;
+	}
+
+	pr_debug("Device data contains: %s", dinfo->data);
+	ret = copy_from_user(dinfo->data, buf, len);
+	if (ret) {
+		pr_debug("copy_from_user failed");
+		return -EFAULT;
+	}
+	pr_debug("copy_from_user succeeded");
+	pr_debug("Now device data contains: %s", dinfo->data);
+
+	return 0;
+}
+
 int cdev_mmap(struct file *f, struct vm_area_struct *vma) {
 	unsigned long phys, pfn;
 	unsigned long start = (unsigned long) vma->vm_start;
@@ -61,19 +107,22 @@ int cdev_mmap(struct file *f, struct vm_area_struct *vma) {
 	pr_debug("mmap called, requested virt addr start: 0x%lx (%lu), size: %lu\n", start, start, size);
 
 	if (size > PAGE_SIZE) {
-		pr_debug("Size too large\n");
+		pr_debug("Size too large");
 		return -EINVAL;
 	}
 
-	pr_debug("alloced virt addr: %p (%lu)\n", dinfo->data, dinfo->data);
+	pr_debug("alloced virt addr: %p (%lu)", dinfo->data, dinfo->data);
 	phys = virt_to_phys((void *) dinfo->data);
 	pfn = phys >> PAGE_SHIFT;
-	pr_debug("alloced phy addr: 0x%lx (%lu), pfn: 0x%lx (%lu)\n", phys, phys, pfn, pfn);
+	pr_debug("alloced phy addr: 0x%lx (%lu), pfn: 0x%lx (%lu)", phys, phys, pfn, pfn);
 
+	pr_debug("Device data contains: %s", dinfo->data);
 	if (remap_pfn_range(vma, start, pfn, size, vma->vm_page_prot)) {
-		pr_debug("remap failed\n");
+		pr_debug("remap failed");
 		return -EAGAIN;
 	}
+	pr_debug("remap succeeded");
+	pr_debug("Now device data contains: %s", dinfo->data);
 
 	return 0;
 }
@@ -103,6 +152,7 @@ static int mem_map_init(void)
 
 	alloc_my_pages();
 	pr_debug("Allocated %d pages\n", NPAGES);
+	strcpy(dinfo.data, "Hello from kernel space!\n");
 
 	return 0;
 }
