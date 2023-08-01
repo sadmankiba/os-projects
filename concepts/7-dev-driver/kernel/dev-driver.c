@@ -13,7 +13,7 @@ MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
 
 #define DEV_MAJOR 175
-#define DEV_MINOR 2
+#define DEV_MINOR 7
 #define NUM_DEVS 1
 #define DEV_NAME "sadman-dev"
 
@@ -86,6 +86,7 @@ ssize_t cdev_write(struct file *f, const char *buf, size_t size, loff_t *offset)
 	if (err) 
 		return err;
 
+	pr_debug("Message written by user: %s", dinfo->data);
 	// *offset = *offset + size;
 	return size;
 }
@@ -98,6 +99,7 @@ long cdev_ioctl(struct file *f, unsigned int cmd, unsigned long arg) {
 	pr_debug(DEV_NAME " ioctl called with cmd %d", cmd);
 	dinfo = (struct dev_info *) f->private_data;
 	if (cmd == IOCTL_PRINT_CMD) {
+		/* FIXME: Getting an oops here */
 		err = copy_from_user(iocd, (struct ioc_data *) arg, sizeof(struct ioc_data));
 		if (err) 
 			return err;
