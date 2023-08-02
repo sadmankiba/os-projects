@@ -1,9 +1,11 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/slab.h> /* kzalloc */
 #include <linux/fs.h> /* register, MKDEV, file, inode, file_operations */
 #include <linux/cdev.h> /* struct cdev, cdev_* */
 #include <linux/sched.h> /* set_current_state */
+#include <linux/uaccess.h> /* copy_to_user, copy_from_user */
 #include <linux/string.h> /* strlen */
 
 #include "dev-driver.h"
@@ -21,11 +23,12 @@ MODULE_LICENSE("GPL");
 #define DEV_BUSY 1
 
 #define MSG "You are reading sadman-dev!"
+#define DATA_SIZE 100
 
 struct dev_info {
 	struct cdev cdev;
 	atomic_t opened;
-	char data[100];
+	char data[DATA_SIZE];
 };
 
 struct dev_info dinfo;
@@ -79,15 +82,15 @@ ssize_t cdev_write(struct file *f, const char *buf, size_t size, loff_t *offset)
 
 	pr_debug(DEV_NAME " writing at offset %lld, size %lu", *offset, size);
 	dinfo = (struct dev_info *) f->private_data;
-	// if (size > strlen(dinfo->data) - *offset) {
-	// 	size = strlen(dinfo->data) - *offset;
-	// }
-	err = copy_from_user(dinfo->data, buf, size);
+
+	size = size < (DATA_SIZE - *offset) ? size : (DATA_SIZE - *offset);
+	err = copy_from_user(dinfo->data + *offset, buf, size);
 	if (err) 
 		return err;
 
-	pr_debug("Message written by user: %s", dinfo->data);
-	// *offset = *offset + size;
+	pr_debug("Message in device data: %s", dinfo->data);
+	*offset = *offset + size;
+	
 	return size;
 }
 
@@ -98,8 +101,8 @@ long cdev_ioctl(struct file *f, unsigned int cmd, unsigned long arg) {
 
 	pr_debug(DEV_NAME " ioctl called with cmd %d", cmd);
 	dinfo = (struct dev_info *) f->private_data;
+	iocd = (struct ioc_data *) kzalloc(sizeof(struct ioc_data), GFP_KERNEL);
 	if (cmd == IOCTL_PRINT_CMD) {
-		/* FIXME: Getting an oops here */
 		err = copy_from_user(iocd, (struct ioc_data *) arg, sizeof(struct ioc_data));
 		if (err) 
 			return err;
