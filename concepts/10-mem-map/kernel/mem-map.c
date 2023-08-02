@@ -15,12 +15,13 @@ MODULE_DESCRIPTION("Simple module");
 MODULE_AUTHOR("Kernel Practitioner");
 MODULE_LICENSE("GPL");
 
-#define DEV_MAJOR 175
-#define DEV_MINOR 2
+#define DEV_MAJOR 176
+#define DEV_MINOR 10
 #define NUM_DEVS 1
 #define DEV_NAME "memmap-dev"
 
 #define NPAGES 5
+#define DATA_SIZE (NPAGES * PAGE_SIZE)
 
 struct dev_info {
 	struct cdev cdev;
@@ -52,11 +53,11 @@ int cdev_release(struct inode *ind, struct file *f) {
 	return 0;
 }
 
-int cdev_read(struct file *f, char __user *buf, size_t len, loff_t *off) {
+ssize_t cdev_read(struct file *f, char __user *buf, size_t len, loff_t *offset) {
 	struct dev_info *dinfo = (struct dev_info *) f->private_data;
 	int ret;
 
-	pr_debug("read called, requested len: %lu", len);
+	pr_debug("read called, requested len: %lu, offset: %u", len, *offset);
 
 	if (len > PAGE_SIZE) {
 		pr_debug("Size too large");
@@ -64,6 +65,7 @@ int cdev_read(struct file *f, char __user *buf, size_t len, loff_t *off) {
 	}
 
 	pr_debug("Device data contains: %s", dinfo->data);
+	len = len < strlen(dinfo->data) - *offset ? len : strlen(dinfo->data) - *offset;
 	ret = copy_to_user(buf, dinfo->data, len);
 	if (ret) {
 		pr_debug("copy_to_user failed");
@@ -71,15 +73,15 @@ int cdev_read(struct file *f, char __user *buf, size_t len, loff_t *off) {
 	}
 	pr_debug("copy_to_user succeeded");
 	pr_debug("Now device data contains: %s", dinfo->data);
-
-	return 0;
+	*offset = *offset + len;
+	return len;
 }
 
-int cdev_write(struct file *f, const char __user *buf, size_t len, loff_t *off) {
+ssize_t cdev_write(struct file *f, const char __user *buf, size_t len, loff_t *offset) {
 	struct dev_info *dinfo = (struct dev_info *) f->private_data;
 	int ret;
 
-	pr_debug("write called, requested len: %lu", len);
+	pr_debug("write called, requested len: %lu, offset: %u", len, *offset);
 
 	if (len > PAGE_SIZE) {
 		pr_debug("Size too large");
@@ -87,15 +89,16 @@ int cdev_write(struct file *f, const char __user *buf, size_t len, loff_t *off) 
 	}
 
 	pr_debug("Device data contains: %s", dinfo->data);
-	ret = copy_from_user(dinfo->data, buf, len);
+	len = len < DATA_SIZE - *offset ? len : DATA_SIZE - *offset;
+	ret = copy_from_user(dinfo->data + *offset, buf, len);
 	if (ret) {
 		pr_debug("copy_from_user failed");
 		return -EFAULT;
 	}
 	pr_debug("copy_from_user succeeded");
 	pr_debug("Now device data contains: %s", dinfo->data);
-
-	return 0;
+	*offset = *offset + len;
+	return len;
 }
 
 int cdev_mmap(struct file *f, struct vm_area_struct *vma) {
@@ -132,6 +135,8 @@ static const struct file_operations fops = {
 	.open = cdev_open,
 	.release = cdev_release, 
 	.mmap = cdev_mmap,
+	.read = cdev_read,
+	.write = cdev_write,
 };
 
 static int mem_map_init(void)
@@ -171,7 +176,7 @@ static void mem_map_exit(void)
 
 void alloc_my_pages(void) {
 	int i;
-	dinfo.data = kmalloc(NPAGES * PAGE_SIZE, GFP_KERNEL);
+	dinfo.data = kmalloc(DATA_SIZE, GFP_KERNEL);
 	if (!dinfo.data) {
 		pr_debug("kmalloc failed\n");
 		return;
