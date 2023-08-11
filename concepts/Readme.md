@@ -45,6 +45,11 @@ Check number of interrupts on IRQs
 cat /proc/stat | grep intr
 ```
 
+Check PCI device drivers
+```
+ls /sys/bus/pci/drivers/
+```
+
 # 10 - Memory Mapping 
 
 Lower address in physical memory for kernel is mapped to userspace. After mapped, read, write system call completes very fast (~20x reduction). 
