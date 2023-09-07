@@ -1,5 +1,0 @@
-ccflags-y = -Wno-unused-function -Wno-unused-label -Wno-unused-variable -DDEBUG
-
-ccflags-y += -I/home/sadman/GitRepos/Sys/Intro-to-OS-Assignments/concepts/7-dev-driver/include
-
-obj-m = dev-driver.o
