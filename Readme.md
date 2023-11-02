@@ -1,6 +1,6 @@
-# OS Assignments 
+# OS Projects 
 
-Assignments of UW-Madison CS537 course-
+OS projects done as part of UW-Madison CS537 course-
 
 ```
 xv6/xv6-tracer/:     Adds system calls in xv6 to track number of times a file is opened
