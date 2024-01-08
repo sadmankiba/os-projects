@@ -33,7 +33,6 @@ def main(args):
         else:
             map_of_entries[i]  = len(entries)
         
-        print(i)
         tup = (i, bytearray(random.getrandbits(8) for _ in range(96))) # 96 random bytes
         entries.append(tup)
         if(len(entries) == num_entries): # End when we hit the desired number of entries
